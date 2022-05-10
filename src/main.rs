@@ -2,9 +2,12 @@ use std::{
     env,
     process,
     thread,
-    time::Duration,
-    mem
+    time::{Duration,SystemTime},
+    mem,
 };
+use serde::{Serialize, Deserialize};
+use serde_json::{Result, Value};
+use to_vec::ToVec;
 
 extern crate paho_mqtt as mqtt;
 
@@ -12,6 +15,12 @@ enum IpAddrKind {
         V4 = 0,
         V6 = 1,
     }
+
+struct BufferElement {
+    timestamp: SystemTime,
+    id: String,
+    data: Vec<u8>,
+}
 
 enum Packets {
 	EMT_DATA_SIGNAL_MESSAGE,
@@ -50,6 +59,7 @@ struct RediSignal {
 
 const MAX_N: usize = 900;
 
+#[derive(Serialize, Deserialize, Debug)]
 struct OwnDataSignalPacket {
 	packet_length:u16, // Paketin kokonaispituus
 	packet_id:u16, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
@@ -59,7 +69,8 @@ struct OwnDataSignalPacket {
 	signal_group:u16, // see DSG_
 	milliseconds:u64, // aikaleima millisekunteina vuodesta 1601
 	// datan pituus samplePacketLength - 16
-	data:[u8;MAX_N],
+	//data:[u8;MAX_N],
+    data: Vec<u8>,
 	//data:data,
 
 	//signals:[u8;996], // sisaltaa DataSignalSampleja
@@ -125,13 +136,21 @@ fn main() {
 		signal_group:100, // see DSG_
 		milliseconds:123123, // aikaleima millisekunteina vuodesta 1601
 		// datan pituus samplePacketLength - 16
-		data:[0;900],
+		
+        data:Vec::new(),
     };
     
     let value: u32 = 0x1FFFF;
     let bytes = value.to_be_bytes();
-    sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
-    let derp = mem::size_of::<OwnDataSignalPacket>();
+    //sample.data.to_vec(bytes);
+    sample.data = bytes.to_vec();
+    //sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
+
+    let serialized = serde_json::to_string(&sample).unwrap();
+
+    // Prints serialized = {"x":1,"y":2}
+    println!("serialized = {}", serialized);
+    //let derp = mem::size_of::<OwnDataSignalPacket>();
     
     //sample.data.as_slice(value.to_be_bytes());// = value.to_be_bytes().map(f)
     //for i in 0..bytes.len() {
