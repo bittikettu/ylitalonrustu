@@ -164,7 +164,7 @@ fn main() {
     
     sample.packdata();
     let value: u64 = 0x1FFFF;
-    let derp = "haista sinä mursu paska";
+    let derp = "Testirimpsutekstihommeli";
     let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
     let hep = derp.as_bytes();
     //sample.data.to_vec(bytes);
