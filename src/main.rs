@@ -2,6 +2,7 @@ use std::{
     env,
     process,
     thread,
+    str,
     time::{Duration,SystemTime},
     mem,
 };
@@ -76,6 +77,27 @@ struct OwnDataSignalPacket {
 	//signals:[u8;996], // sisaltaa DataSignalSampleja
 }
 
+impl OwnDataSignalPacket {
+    fn packdata(&self) {
+        match self.signal_sample_type {
+            1=>{
+                println!("One")
+            },
+            2=>{
+                println!("Two")
+            },
+            3=>{
+                println!("Three")
+            },
+            0=>{
+                println!("Zero")
+            },
+            _=>{
+                println!("Rest of the number")
+            }
+        }
+    }
+}
 
 //fn f(s: &[u8]) {}
 
@@ -121,11 +143,11 @@ fn subscribe_topics(cli: &mqtt::Client) {
     }
 }
 
+
 fn main() {
     let host = env::args().nth(1).unwrap_or_else(||
         DFLT_BROKER.to_string()
     );
-
 
     let mut sample = OwnDataSignalPacket {
 	 	packet_length:66, // Paketin kokonaispituus
@@ -140,12 +162,22 @@ fn main() {
         data:Vec::new(),
     };
     
-    let value: u32 = 0x1FFFF;
-    let bytes = value.to_be_bytes();
+    sample.packdata();
+    let value: u64 = 0x1FFFF;
+    let derp = "haista sinä mursu paska";
+    let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
+    let hep = derp.as_bytes();
     //sample.data.to_vec(bytes);
-    sample.data = bytes.to_vec();
-    //sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
+    sample.data = derp.as_bytes().to_vec();//bytes.to_vec();
+    sample.data.push(0);
 
+    let s = match str::from_utf8(&sample.data) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    };
+
+    //sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
+    println!("serialized = {}", s);
     let serialized = serde_json::to_string(&sample).unwrap();
 
     // Prints serialized = {"x":1,"y":2}
