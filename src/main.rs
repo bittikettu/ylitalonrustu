@@ -81,16 +81,36 @@ struct OwnDataSignalPacket {
 }
 
 impl OwnDataSignalPacket {
-    fn packdata(&self) {
+    fn packdata(&self, value:&str) {
+        //println!("{:?}",value);
         match self.signal_sample_type {
             1=>{
-                println!("One")
+                println!("type: {} value: {}",self.signal_sample_type, value.parse::<u64>().unwrap());
             },
             2=>{
-                println!("Two")
+                println!("type: {} value: {}",self.signal_sample_type, value);
             },
             3=>{
-                println!("Three")
+                println!("type: {} value: {}",self.signal_sample_type, value);
+            },
+            4=>{
+                println!("type: {} value: {}",self.signal_sample_type, value);
+            },
+            5=>{
+                println!("type: {} value: {}",self.signal_sample_type, value);
+            },
+            6=>{
+                println!("type: {} value: {}",self.signal_sample_type, value);
+            },
+            7=>{
+                println!("type: {} value: {}",self.signal_sample_type, value);
+            },
+            8=>{
+                //println!("type: {} value: {}",self.signal_sample_type, value);
+                println!("type: {} value: {}",self.signal_sample_type, value.parse::<f64>().unwrap());
+            },
+            9=>{
+                println!("type: {} value: {}",self.signal_sample_type, value);
             },
             0=>{
                 println!("Zero")
@@ -165,7 +185,7 @@ fn main() {
         data:Vec::new(),
     };
     
-    sample.packdata();
+    sample.packdata("1");
     //let value: u64 = 0x1FFFF;
     let derp = "Testirimpsutekstihommeli";
     let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
@@ -237,8 +257,8 @@ fn main() {
             let path = Path::new(msg.topic());
             //println!("{}", path.display());
             let machine = path.file_name().unwrap().to_str().unwrap();
-            println!("{}", machine);
-            println!("{}", msg.payload_str());
+            //println!("{}", machine);
+            //println!("{}", msg.payload_str());
             //let v: Value = serde_json::from_str(machine);
             //let mut object: Value = serde_json::from_str(machine).unwrap();
             //println!("{:?}", serde_json::from_str::<serde_json::Value>(&msg.payload_str()));
@@ -264,7 +284,8 @@ fn main() {
                         data:Vec::new(),
                    };
                    let serialized = serde_json::to_string(&sample2).unwrap();
-                   println!("serialized = {}", serialized);
+                   sample2.packdata(v["value"].as_str().unwrap());
+                   //println!("serialized = {}", serialized);
                 },
                 Err(e) => println!("error{e:?}"),
             }
