@@ -9,7 +9,10 @@ use std::{
 use serde::{Serialize, Deserialize};
 use serde_json::{Result, Value};
 use to_vec::ToVec;
-
+use std::path::Path;
+use std::ffi::OsStr;
+use std::ffi::OsString;
+use std::convert::TryFrom;
 extern crate paho_mqtt as mqtt;
 
 enum IpAddrKind {
@@ -112,7 +115,7 @@ impl OwnDataSignalPacket {
 //    }
 //}
 
-const DFLT_BROKER:&str = "tcp://localhost:1883";
+const DFLT_BROKER:&str = "tcp://10.3.1.132:1883";
 const DFLT_CLIENT:&str = "rust_subscribe";
 const DFLT_TOPICS:&[&str] = &["rust/mqtt", "incoming/machine/+"];
 // The qos list that match topics above.
@@ -163,7 +166,7 @@ fn main() {
     };
     
     sample.packdata();
-    let value: u64 = 0x1FFFF;
+    //let value: u64 = 0x1FFFF;
     let derp = "Testirimpsutekstihommeli";
     let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
     let hep = derp.as_bytes();
@@ -230,7 +233,42 @@ fn main() {
     println!("Processing requests...");
     for msg in rx.iter() {
         if let Some(msg) = msg {
-            println!("{}", msg);
+            //println!("{}", msg.topic());
+            let path = Path::new(msg.topic());
+            //println!("{}", path.display());
+            let machine = path.file_name().unwrap().to_str().unwrap();
+            println!("{}", machine);
+            println!("{}", msg.payload_str());
+            //let v: Value = serde_json::from_str(machine);
+            //let mut object: Value = serde_json::from_str(machine).unwrap();
+            //println!("{:?}", serde_json::from_str::<serde_json::Value>(&msg.payload_str()));
+            let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
+
+            match obj {
+                Ok(v) => {
+                    //println!("{v:?}")
+                    //println!("{:?}",v["type"].as_u64().unwrap() as u16);
+                    //println!("{:?}",v["id"].as_u64().unwrap() as u16);
+                    //println!("{}",v["ts"].as_str().unwrap().parse::<u64>().unwrap());
+                    //println!("{:?}",v["value"].as_u64().unwrap() as u8);
+                    
+                    let sample2 = OwnDataSignalPacket {
+                        packet_length:0, // Paketin kokonaispituus
+                        packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
+                        sample_packet_length:0, // pituus tavuina
+                        signal_sample_type:v["type"].as_u64().unwrap() as u16, // current value, average, minimum or maximum, see SST_
+                        signal_number:v["id"].as_u64().unwrap() as u16,
+                        signal_group:100, // see DSG_
+                        milliseconds:v["ts"].as_str().unwrap().parse::<u64>().unwrap(), // aikaleima millisekunteina vuodesta 1601
+                        // datan pituus samplePacketLength - 16
+                        data:Vec::new(),
+                   };
+                   let serialized = serde_json::to_string(&sample2).unwrap();
+                   println!("serialized = {}", serialized);
+                },
+                Err(e) => println!("error{e:?}"),
+            }
+
         }
         else if !cli.is_connected() {
             if try_reconnect(&cli) {
