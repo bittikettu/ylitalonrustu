@@ -3,146 +3,16 @@ use std::{
     process,
     thread,
     str,
-    time::{Duration,SystemTime},
-    mem, intrinsics::size_of_val,
+    time::Duration,
 };
 use serde::{Serialize, Deserialize};
 use serde_json::{Result, Value};
-use to_vec::ToVec;
 use std::path::Path;
-use std::ffi::OsStr;
-use std::ffi::OsString;
-use std::convert::TryFrom;
 extern crate paho_mqtt as mqtt;
+use bincode;
+mod exme;
 
-enum IpAddrKind {
-        V4 = 0,
-        V6 = 1,
-    }
-
-struct BufferElement {
-    timestamp: SystemTime,
-    id: String,
-    data: Vec<u8>,
-}
-
-enum Packets {
-	EMT_DATA_SIGNAL_MESSAGE,
-	EMT_DATA_COLLECTION_TABLE_MESSAGE,
-	EMT_DATA_SIGNAL_DEFINITION_MESSAGE,
-	EMT_OWN_DATA_SIGNAL_MESSAGE
-}
-
-//const EMT_DATA_SIGNAL_MESSAGE:&u8 = 18;
-//const EMT_DATA_COLLECTION_TABLE_MESSAGE:&u8 = 19;
-//const EMT_DATA_SIGNAL_DEFINITION_MESSAGE:&u8 = 20;
-//const EMT_OWN_DATA_SIGNAL_MESSAGE:&u8 = 21;
-
-
-struct RediSignal {
-    active: bool,
-    username: String,
-    email: String,
-    sign_in_count: u64,
-}
-
-//struct DataSignalSample {
-//	sample_packet_length:u16, // pituus tavuina
-//	signal_sample_type:u16, // current value, average, minimum or maximum, see SST_
-//	signal_number:u16,
-//	signal_group:u16, // see DSG_
-//	milliseconds:u64, // aikaleima millisekunteina vuodesta 1601
-//	// datan pituus samplePacketLength - 16
-//	data:[u8;900], // tata ei tarvitse olla kokonaan, jos samplePacketLength < 900
-//}
-
-	union data {
-	    type_str: u32,
-	    f2: f32,
-	}
-
-const MAX_N: usize = 900;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct OwnDataSignalPacket {
-	packet_length:u16, // Paketin kokonaispituus
-	packet_id:u16, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-	sample_packet_length:u16, // pituus tavuina
-	signal_sample_type:u16, // current value, average, minimum or maximum, see SST_
-	signal_number:u16,
-	signal_group:u16, // see DSG_
-	milliseconds:u64, // aikaleima millisekunteina vuodesta 1601
-	// datan pituus samplePacketLength - 16
-	//data:[u8;MAX_N],
-    data: Vec<u8>,
-	//data:data,
-
-	//signals:[u8;996], // sisaltaa DataSignalSampleja
-}
-
-impl OwnDataSignalPacket {
-    fn packdata(&mut self, value:&str) {
-        //println!("{:?}",value);
-        match self.signal_sample_type {
-            1=>{
-                println!("type: {} value: {}",self.signal_sample_type, value.parse::<u64>().unwrap());
-            },
-            2=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-            },
-            3=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-            },
-            4=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-            },
-            5=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-            },
-            6=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-            },
-            7=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-            },
-            8=>{
-                //println!("type: {} value: {}",self.signal_sample_type, value);
-                println!("type: {} value: {}",self.signal_sample_type, value.parse::<f64>().unwrap());
-                self.data = value.parse::<f64>().unwrap().to_be_bytes().to_vec();
-                self.data.push(0);
-            },
-            9=>{
-                println!("type: {} value: {}",self.signal_sample_type, value);
-                
-                //let bytes = value.as_bytes().to_vec().push(0);//value.to_be_bytes();
-                //derp.as_bytes().to_vec();
-                self.data = value.as_bytes().to_vec();
-                self.data.push(0);
-            },
-            0=>{
-                println!("Zero")
-            },
-            _=>{
-                println!("Rest of the number")
-            }
-        }
-    }
-}
-
-//fn f(s: &[u8]) {}
-
-//pub fn main() {
-//    let x = "a";
-//    f(x.as_bytes())
-//}
-
-//fn build_sample(signal_number: u16, username: String) -> OwnDataSignalPacket {
-//    OwnDataSignalPacket {
-//		packet_id : 1,
-//    }
-//}
-
-const DFLT_BROKER:&str = "tcp://10.3.1.132:1883";
+const DFLT_BROKER:&str = "tcp://localhost:1883";
 const DFLT_CLIENT:&str = "rust_subscribe";
 const DFLT_TOPICS:&[&str] = &["rust/mqtt", "incoming/machine/+"];
 // The qos list that match topics above.
@@ -179,10 +49,11 @@ fn main() {
         DFLT_BROKER.to_string()
     );
 
-    let mut sample = OwnDataSignalPacket {
+    let mut sample = exme::OwnDataSignalPacket {
 	 	packet_length:66, // Paketin kokonaispituus
 		packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
 		sample_packet_length:32, // pituus tavuina
+        signal_view_type:2,
 		signal_sample_type:0, // current value, average, minimum or maximum, see SST_
 		signal_number:1000,
 		signal_group:100, // see DSG_
@@ -212,14 +83,6 @@ fn main() {
 
     // Prints serialized = {"x":1,"y":2}
     println!("serialized = {}", serialized);
-    //let derp = mem::size_of::<OwnDataSignalPacket>();
-    
-    //sample.data.as_slice(value.to_be_bytes());// = value.to_be_bytes().map(f)
-    //for i in 0..bytes.len() {
-	//	sample.data[i] = (bytes[i]) as u8;
-	//}
-    
-    //println!("{:?}" , bytes);
 
     // Define the set of options for the create.
     // Use an ID for a persistent session.
@@ -279,11 +142,12 @@ fn main() {
                     //println!("{}",v["ts"].as_str().unwrap().parse::<u64>().unwrap());
                     //println!("{:?}",v["value"].as_u64().unwrap() as u8);
                     
-                    let mut sample2 = OwnDataSignalPacket {
+                    let mut sample2 = exme::OwnDataSignalPacket {
                         packet_length:0, // Paketin kokonaispituus
-                        packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
+                        packet_id:exme::EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
                         sample_packet_length:0, // pituus tavuina
-                        signal_sample_type:v["type"].as_u64().unwrap() as u16, // current value, average, minimum or maximum, see SST_
+                        signal_sample_type:3, // current value, average, minimum or maximum, see SST_
+                        signal_view_type: v["type"].as_u64().unwrap() as u8,
                         signal_number:v["id"].as_u64().unwrap() as u16,
                         signal_group:100, // see DSG_
                         milliseconds:v["ts"].as_str().unwrap().parse::<u64>().unwrap(), // aikaleima millisekunteina vuodesta 1601
@@ -294,6 +158,8 @@ fn main() {
                    sample2.packdata(v["value"].as_str().unwrap());
                    let serialized = serde_json::to_string(&sample2).unwrap();
                    println!("serialized = {}", serialized);
+                   let bytes = bincode::serialize(&sample2).unwrap();
+                   println!("{:?} {}", bytes,bytes.len());
                 },
                 Err(e) => println!("error{e:?}"),
             }
