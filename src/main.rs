@@ -4,7 +4,7 @@ use std::{
     thread,
     str,
     time::{Duration,SystemTime},
-    mem,
+    mem, intrinsics::size_of_val,
 };
 use serde::{Serialize, Deserialize};
 use serde_json::{Result, Value};
@@ -81,7 +81,7 @@ struct OwnDataSignalPacket {
 }
 
 impl OwnDataSignalPacket {
-    fn packdata(&self, value:&str) {
+    fn packdata(&mut self, value:&str) {
         //println!("{:?}",value);
         match self.signal_sample_type {
             1=>{
@@ -108,9 +108,16 @@ impl OwnDataSignalPacket {
             8=>{
                 //println!("type: {} value: {}",self.signal_sample_type, value);
                 println!("type: {} value: {}",self.signal_sample_type, value.parse::<f64>().unwrap());
+                self.data = value.parse::<f64>().unwrap().to_be_bytes().to_vec();
+                self.data.push(0);
             },
             9=>{
                 println!("type: {} value: {}",self.signal_sample_type, value);
+                
+                //let bytes = value.as_bytes().to_vec().push(0);//value.to_be_bytes();
+                //derp.as_bytes().to_vec();
+                self.data = value.as_bytes().to_vec();
+                self.data.push(0);
             },
             0=>{
                 println!("Zero")
@@ -188,8 +195,8 @@ fn main() {
     sample.packdata("1");
     //let value: u64 = 0x1FFFF;
     let derp = "Testirimpsutekstihommeli";
-    let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
-    let hep = derp.as_bytes();
+    //let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
+    //let hep = derp.as_bytes();
     //sample.data.to_vec(bytes);
     sample.data = derp.as_bytes().to_vec();//bytes.to_vec();
     sample.data.push(0);
@@ -212,7 +219,7 @@ fn main() {
 	//	sample.data[i] = (bytes[i]) as u8;
 	//}
     
-    println!("{:?}" , bytes);
+    //println!("{:?}" , bytes);
 
     // Define the set of options for the create.
     // Use an ID for a persistent session.
@@ -272,7 +279,7 @@ fn main() {
                     //println!("{}",v["ts"].as_str().unwrap().parse::<u64>().unwrap());
                     //println!("{:?}",v["value"].as_u64().unwrap() as u8);
                     
-                    let sample2 = OwnDataSignalPacket {
+                    let mut sample2 = OwnDataSignalPacket {
                         packet_length:0, // Paketin kokonaispituus
                         packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
                         sample_packet_length:0, // pituus tavuina
@@ -283,9 +290,10 @@ fn main() {
                         // datan pituus samplePacketLength - 16
                         data:Vec::new(),
                    };
-                   let serialized = serde_json::to_string(&sample2).unwrap();
+                   
                    sample2.packdata(v["value"].as_str().unwrap());
-                   //println!("serialized = {}", serialized);
+                   let serialized = serde_json::to_string(&sample2).unwrap();
+                   println!("serialized = {}", serialized);
                 },
                 Err(e) => println!("error{e:?}"),
             }
