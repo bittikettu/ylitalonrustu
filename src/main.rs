@@ -49,43 +49,6 @@ fn main() {
         DFLT_BROKER.to_string()
     );
 
-    // let mut sample = exme::OwnDataSignalPacket {
-	//  	packet_length:66, // Paketin kokonaispituus
-	// 	packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-	// 	sample_packet_length:32, // pituus tavuina
-    //     signal_view_type:2,
-	// 	signal_sample_type:0, // current value, average, minimum or maximum, see SST_
-	// 	signal_number:1000,
-	// 	signal_group:100, // see DSG_
-	// 	milliseconds:123123, // aikaleima millisekunteina vuodesta 1601
-	// 	// datan pituus samplePacketLength - 16
-		
-    //     data:Vec::new(),
-    // };
-    
-    // sample.packdata("1");
-    // //let value: u64 = 0x1FFFF;
-    // let derp = "Testirimpsutekstihommeli";
-    // //let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
-    // //let hep = derp.as_bytes();
-    // //sample.data.to_vec(bytes);
-    // sample.data = derp.as_bytes().to_vec();//bytes.to_vec();
-    // sample.data.push(0);
-
-    // let s = match str::from_utf8(&sample.data) {
-    //     Ok(v) => v,
-    //     Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-    // };
-
-    // //sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
-    // println!("serialized = {}", s);
-    // let serialized = serde_json::to_string(&sample).unwrap();
-
-    // // Prints serialized = {"x":1,"y":2}
-    // println!("serialized = {}", serialized);
-
-    // Define the set of options for the create.
-    // Use an ID for a persistent session.
     let create_opts = mqtt::CreateOptionsBuilder::new()
         .server_uri(host)
         .client_id(DFLT_CLIENT.to_string())
@@ -123,25 +86,25 @@ fn main() {
     println!("Processing requests...");
     for msg in rx.iter() {
         if let Some(msg) = msg {
-            //println!("{}", msg.topic());
             let path = Path::new(msg.topic());
-            //println!("{}", path.display());
-            let machine = path.file_name().unwrap().to_str().unwrap();
-            //println!("{}", machine);
-            //println!("{}", msg.payload_str());
-            //let v: Value = serde_json::from_str(machine);
-            //let mut object: Value = serde_json::from_str(machine).unwrap();
-            //println!("{:?}", serde_json::from_str::<serde_json::Value>(&msg.payload_str()));
-            let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
+            //let machine = path.file_name().unwrap().to_str().unwrap();
+            match path.file_name(){
+                Some(polku) => {
+                    
+                    match polku.to_str() {
+                        Some(macstr) => {
+                            let machine = macstr;
+                            println!("{machine:?}");
+                        },
+                        None => println!("failed to convert string"),
+                    }
+                }
+                None => println!("failed to convert string"),
+            }
 
+            let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
             match obj {
                 Ok(v) => {
-                    //println!("{v:?}")
-                    //println!("{:?}",v["type"].as_u64().unwrap() as u16);
-                    //println!("{:?}",v["id"].as_u64().unwrap() as u16);
-                    //println!("{}",v["ts"].as_str().unwrap().parse::<u64>().unwrap());
-                    //println!("{:?}",v["value"].as_u64().unwrap() as u8);
-
                     let mut sample2 = exme::OwnDataSignalPacket {
                         packet_length:0, // Paketin kokonaispituus
                         packet_id:exme::EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
@@ -159,12 +122,18 @@ fn main() {
                     Some(x) => {
                         let parsed = sample2.packdata(x);
                         match parsed {
-                         Ok(v) => {
-                             sample2.data = v;
-                             let serialized = serde_json::to_string(&sample2).unwrap();
-                             println!("serialized = {}", serialized);
-                             let bytes = bincode::serialize(&sample2).unwrap();
-                             println!("{:?} {}", bytes,bytes.len());
+                         Ok(pars) => {
+                             sample2.data = pars;
+                             //let serialized = serde_json::to_string(&sample2).unwrap();
+                             //println!("serialized = {}", serialized);
+                             match bincode::serialize(&sample2) {
+                                Ok(bincoded) => {
+                                    let bytes = bincoded;
+                                    println!("{:?} {}", bytes,bytes.len());
+                                },
+                                Err(e) => println!("error{e:?}"),
+                             }
+
                          },
                          Err(e) => println!("error"),
                         }
