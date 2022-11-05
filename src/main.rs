@@ -154,12 +154,18 @@ fn main() {
                         // datan pituus samplePacketLength - 16
                         data:Vec::new(),
                    };
-                   
-                   sample2.packdata(v["value"].as_str().unwrap());
-                   let serialized = serde_json::to_string(&sample2).unwrap();
-                   println!("serialized = {}", serialized);
-                   let bytes = bincode::serialize(&sample2).unwrap();
-                   println!("{:?} {}", bytes,bytes.len());
+
+                   let parsed = sample2.packdata(v["value"].as_str().unwrap());
+                   match parsed {
+                    Ok(v) => {
+                        sample2.data = v;
+                        let serialized = serde_json::to_string(&sample2).unwrap();
+                        println!("serialized = {}", serialized);
+                        let bytes = bincode::serialize(&sample2).unwrap();
+                        println!("{:?} {}", bytes,bytes.len());
+                    },
+                    Err(e) => println!("error"),
+                   }
                 },
                 Err(e) => println!("error{e:?}"),
             }
