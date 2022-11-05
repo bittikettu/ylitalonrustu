@@ -143,8 +143,7 @@ impl OwnDataSignalPacket {
 
                                 match bincode::serialize(&self) {
                                     Ok(bincoded) => {
-                                        let bytes = bincoded;
-                                        self.packet_length = bytes.len() as u16;
+                                        self.packet_length = bincoded.len() as u16;
                                         self.sample_packet_length = self.packet_length - 16;
                                         //println!("{:?} {}", bytes, bytes.len());
                                         return Ok(bincode::serialize(&self).unwrap());
