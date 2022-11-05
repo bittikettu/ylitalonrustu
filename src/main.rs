@@ -109,7 +109,13 @@ fn main() {
                 }
                 println!("{}", msg);
                 let mut sample2 = exme::OwnDataSignalPacket::default(); 
-                sample2.to_exmebus(&msg).unwrap();
+
+                match sample2.to_exmebus(&msg) {
+                    Ok(bytes) => println!("{:?} {}", bytes, bytes.len()),
+                    Err(e) => {
+                        println!("error{e:?}");
+                    }
+                }
                 /* */
             } else {
                 // A "None" means we were disconnected. Try to reconnect...

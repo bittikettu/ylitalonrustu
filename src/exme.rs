@@ -48,7 +48,8 @@ type V_STRING             = str; /* string */
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
     ConversionError,
-    ConversionNotDefined
+    ConversionNotDefined,
+    PreliminaryDataNotValid,
 }
 
 
@@ -68,17 +69,17 @@ pub const EMT_OWN_DATA_SIGNAL_MESSAGE:u16 = 21;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OwnDataSignalPacket {
-	pub packet_length:u16, // Paketin kokonaispituus
-	pub packet_id:u16, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-	pub sample_packet_length:u16, // pituus tavuina
-    pub signal_view_type:u8,
-	pub signal_sample_type:u8, // current value, average, minimum or maximum, see SST_
-	pub signal_number:u16,
-	pub signal_group:u16, // see DSG_
-	pub milliseconds:u64, // aikaleima millisekunteina vuodesta 1601
+	packet_length:u16, // Paketin kokonaispituus
+	packet_id:u16, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
+	sample_packet_length:u16, // pituus tavuina
+    signal_view_type:u8,
+	signal_sample_type:u8, // current value, average, minimum or maximum, see SST_
+	signal_number:u16,
+	signal_group:u16, // see DSG_
+	milliseconds:u64, // aikaleima millisekunteina vuodesta 1601
 	// datan pituus samplePacketLength - 16
 	//data:[u8;MAX_N],
-    pub data: Vec<u8>,
+    data: Vec<u8>,
 	//data:data,
 
 	//signals:[u8;996], // sisaltaa DataSignalSampleja
@@ -104,7 +105,6 @@ impl Default for OwnDataSignalPacket {
 impl OwnDataSignalPacket {
     pub fn to_exmebus(&mut self, msg:&Message) -> Result<(Vec<u8>), MyError> {
         let path = Path::new(msg.topic());
-        //let machine = path.file_name().unwrap().to_str().unwrap();
         match path.file_name() {
             Some(polku) => match polku.to_str() {
                 Some(macstr) => {
@@ -119,22 +119,37 @@ impl OwnDataSignalPacket {
         let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
         match obj {
             Ok(v) => {
-                self.signal_view_type = v["type"].as_u64().unwrap() as u8;
-                self.signal_number = v["id"].as_u64().unwrap() as u16;
-                self.milliseconds = v["ts"].as_str().unwrap().parse::<u64>().unwrap();
-                //    let parssi = v["value"].as_str();
+                
+                match v["type"].as_u64() {
+                    Some(value) => self.signal_view_type = value as u8,
+                    None => return Err(MyError::PreliminaryDataNotValid)
+                }
+
+                match v["id"].as_u64()  {
+                    Some(value) => self.signal_number = value as u16,
+                    None => return Err(MyError::PreliminaryDataNotValid)
+                }
+
+                match v["ts"].as_str() {
+                    Some(value) => {
+                        match value.parse::<u64>() {
+                            Ok(value) => self.milliseconds = value,
+                            Err(e) => return Err(MyError::PreliminaryDataNotValid)
+                        }
+                    },
+                    None => return Err(MyError::PreliminaryDataNotValid)
+                }
+                
                 match v["value"].as_str() {
                     Some(x) => {
                         let parsed = self.packdata(x);
                         match parsed {
                             Ok(pars) => {
                                 self.data = pars;
-                                //let serialized = serde_json::to_string(&sample2).unwrap();
-                                //println!("serialized = {}", serialized);
                                 match bincode::serialize(&self) {
                                     Ok(bincoded) => {
                                         let bytes = bincoded;
-                                        println!("{:?} {}", bytes, bytes.len());
+                                        //println!("{:?} {}", bytes, bytes.len());
                                         return Ok(bytes);
                                     }
                                     Err(e) => {
@@ -164,7 +179,7 @@ impl OwnDataSignalPacket {
 }
 
 impl OwnDataSignalPacket {
-    pub fn packdata(&mut self, value:&str) -> Result<(Vec<u8>), MyError> {
+    pub fn packdata(&mut self, value:&str) -> Result<Vec<u8>, MyError> {
         let mut retvec: Vec<u8> = Vec::new();
         println!("type: {} value: {}",self.signal_sample_type, value);
         match self.signal_view_type {
