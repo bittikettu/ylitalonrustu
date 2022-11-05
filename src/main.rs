@@ -1,165 +1,130 @@
-use std::{
-    env,
-    process,
-    thread,
-    str,
-    time::Duration,
-};
-use serde::{Serialize, Deserialize};
+// paho-mqtt/examples/async_subscribe.rs
+// This is a Paho MQTT Rust client, sample application.
+//
+//! This application is an MQTT subscriber using the asynchronous client
+//! interface of the Paho Rust client library.
+//! It also monitors for disconnects and performs manual re-connections.
+//!
+//! The sample demonstrates:
+//!   - An async/await subscriber
+//!   - Connecting to an MQTT server/broker.
+//!   - Subscribing to multiple topics
+//!   - Using MQTT v5 subscribe options
+//!   - Receiving messages from an async stream.
+//!   - Handling disconnects and attempting manual reconnects.
+//!   - Using a "persistent" (non-clean) session so the broker keeps
+//!     subscriptions and messages through reconnects.
+//!   - Last will and testament
+//!
+
+/*******************************************************************************
+ * Copyright (c) 2017-2022 Frank Pagliughi <fpagliughi@mindspring.com>
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    http://www.eclipse.org/legal/epl-v10.html
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
+ *
+ * Contributors:
+ *    Frank Pagliughi - initial implementation and documentation
+ *******************************************************************************/
+
+use bincode;
+use futures::{executor::block_on, stream::StreamExt};
+use paho_mqtt as mqtt;
+use serde::{Deserialize, Serialize};
 use serde_json::{Result, Value};
 use std::path::Path;
-extern crate paho_mqtt as mqtt;
-use bincode;
+use std::{env, process, time::Duration};
+use std::{str, thread};
 mod exme;
 
-const DFLT_BROKER:&str = "tcp://localhost:1883";
-const DFLT_CLIENT:&str = "rust_subscribe";
-const DFLT_TOPICS:&[&str] = &["rust/mqtt", "incoming/machine/+"];
-// The qos list that match topics above.
-const DFLT_QOS:&[i32] = &[0, 1];
+// The topics to which we subscribe.
+const TOPICS: &[&str] = &["incoming/machine/+", "hello"];
+const QOS: &[i32] = &[1, 1];
 
-
-
-// Reconnect to the broker when connection is lost.
-fn try_reconnect(cli: &mqtt::Client) -> bool
-{
-    println!("Connection lost. Waiting to retry connection");
-    for _ in 0..12 {
-        thread::sleep(Duration::from_millis(5000));
-        if cli.reconnect().is_ok() {
-            println!("Successfully reconnected");
-            return true;
-        }
-    }
-    println!("Unable to reconnect after several attempts.");
-    false
-}
-
-// Subscribes to multiple topics.
-fn subscribe_topics(cli: &mqtt::Client) {
-    if let Err(e) = cli.subscribe_many(DFLT_TOPICS, DFLT_QOS) {
-        println!("Error subscribes topics: {:?}", e);
-        process::exit(1);
-    }
-}
-
+/////////////////////////////////////////////////////////////////////////////
 
 fn main() {
-    let host = env::args().nth(1).unwrap_or_else(||
-        DFLT_BROKER.to_string()
-    );
+    // Initialize the logger from the environment
+    env_logger::init();
 
+    let host = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "tcp://localhost:1883".to_string());
+
+    // Create the client. Use an ID for a persistent session.
+    // A real system should try harder to use a unique ID.
     let create_opts = mqtt::CreateOptionsBuilder::new()
+        .mqtt_version(mqtt::MQTT_VERSION_5)
         .server_uri(host)
-        .client_id(DFLT_CLIENT.to_string())
+        .client_id("rust_async_sub_v5")
         .finalize();
 
-    // Create a client.
-    let cli = mqtt::Client::new(create_opts).unwrap_or_else(|err| {
-        println!("Error creating the client: {:?}", err);
+    // Create the client connection
+    let mut cli = mqtt::AsyncClient::new(create_opts).unwrap_or_else(|e| {
+        println!("Error creating the client: {:?}", e);
         process::exit(1);
     });
 
-    // Initialize the consumer before connecting.
-    let rx = cli.start_consuming();
+    if let Err(err) = block_on(async {
+        // Get message stream before connecting.
+        let mut strm = cli.get_stream(25);
 
-    // Define the set of options for the connection.
-    let lwt = mqtt::MessageBuilder::new()
-        .topic("test")
-        .payload("Consumer lost connection")
-        .finalize();
-    let conn_opts = mqtt::ConnectOptionsBuilder::new()
-        .keep_alive_interval(Duration::from_secs(20))
-        .clean_session(false)
-        .will_message(lwt)
-        .finalize();
+        // Define the set of options for the connection
+        let lwt = mqtt::Message::new("test", "Async subscriber lost connection", mqtt::QOS_1);
 
-    // Connect and wait for it to complete or fail.
-    if let Err(e) = cli.connect(conn_opts) {
-        println!("Unable to connect:\n\t{:?}", e);
-        process::exit(1);
-    }
+        let conn_opts = mqtt::ConnectOptionsBuilder::new()
+            .mqtt_version(mqtt::MQTT_VERSION_5)
+            .clean_start(false)
+            .properties(mqtt::properties![mqtt::PropertyCode::SessionExpiryInterval => 3600])
+            .will_message(lwt)
+            .finalize();
 
-    // Subscribe topics.
-    subscribe_topics(&cli);
+        // Make the connection to the broker
+        println!("Connecting to the MQTT server...");
+        cli.connect(conn_opts).await?;
 
-    println!("Processing requests...");
-    for msg in rx.iter() {
-        if let Some(msg) = msg {
-            let path = Path::new(msg.topic());
-            //let machine = path.file_name().unwrap().to_str().unwrap();
-            match path.file_name(){
-                Some(polku) => {
-                    
-                    match polku.to_str() {
-                        Some(macstr) => {
-                            let machine = macstr;
-                            println!("{machine:?}");
-                        },
-                        None => println!("failed to convert string"),
-                    }
+        println!("Subscribing to topics: {:?}", TOPICS);
+        let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published(); TOPICS.len()];
+        cli.subscribe_many_with_options(TOPICS, QOS, &sub_opts, None)
+            .await?;
+
+        // Just loop on incoming messages.
+        println!("Waiting for messages...");
+
+        // Note that we're not providing a way to cleanly shut down and
+        // disconnect. Therefore, when you kill this app (with a ^C or
+        // whatever) the server will get an unexpected drop and then
+        // should emit the LWT message.
+
+        while let Some(msg_opt) = strm.next().await {
+            if let Some(msg) = msg_opt {
+                if msg.retained() {
+                    print!("(R) ");
                 }
-                None => println!("failed to convert string"),
-            }
-
-            let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
-            match obj {
-                Ok(v) => {
-                    let mut sample2 = exme::OwnDataSignalPacket {
-                        packet_length:0, // Paketin kokonaispituus
-                        packet_id:exme::EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-                        sample_packet_length:0, // pituus tavuina
-                        signal_sample_type:3, // current value, average, minimum or maximum, see SST_
-                        signal_view_type: v["type"].as_u64().unwrap() as u8,
-                        signal_number:v["id"].as_u64().unwrap() as u16,
-                        signal_group:100, // see DSG_
-                        milliseconds:v["ts"].as_str().unwrap().parse::<u64>().unwrap(), // aikaleima millisekunteina vuodesta 1601
-                        // datan pituus samplePacketLength - 16
-                        data:Vec::new(),
-                   };
-                //    let parssi = v["value"].as_str();
-                   match v["value"].as_str() {
-                    Some(x) => {
-                        let parsed = sample2.packdata(x);
-                        match parsed {
-                         Ok(pars) => {
-                             sample2.data = pars;
-                             //let serialized = serde_json::to_string(&sample2).unwrap();
-                             //println!("serialized = {}", serialized);
-                             match bincode::serialize(&sample2) {
-                                Ok(bincoded) => {
-                                    let bytes = bincoded;
-                                    println!("{:?} {}", bytes,bytes.len());
-                                },
-                                Err(e) => println!("error{e:?}"),
-                             }
-
-                         },
-                         Err(e) => println!("error"),
-                        }
-                    },
-                    None => println!("failed to convert string"),
-                   }
-                },
-                Err(e) => println!("error{e:?}"),
-            }
-
-        }
-        else if !cli.is_connected() {
-            if try_reconnect(&cli) {
-                println!("Resubscribe topics...");
-                subscribe_topics(&cli);
+                println!("{}", msg);
+                let mut sample2 = exme::OwnDataSignalPacket::default(); 
+                sample2.to_exmebus(&msg).unwrap();
+                /* */
             } else {
-                break;
+                // A "None" means we were disconnected. Try to reconnect...
+                println!("Lost connection. Attempting reconnect.");
+                while let Err(err) = cli.reconnect().await {
+                    println!("Error reconnecting: {}", err);
+                    // For tokio use: tokio::time::delay_for()
+                    async_std::task::sleep(Duration::from_millis(1000)).await;
+                }
             }
         }
-    }
 
-    // If still connected, then disconnect now.
-    if cli.is_connected() {
-        println!("Disconnecting");
-        cli.unsubscribe_many(DFLT_TOPICS).unwrap();
-        cli.disconnect(None).unwrap();
+        // Explicit return type for the async block
+        Ok::<(), mqtt::Error>(())
+    }) {
+        eprintln!("{}", err);
     }
-    println!("Exiting");
 }

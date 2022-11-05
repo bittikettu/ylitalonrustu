@@ -1,7 +1,28 @@
-use std::str;
-use serde::{Serialize, Deserialize};
-use bincode;
+/*******************************************************************************
+ * Copyright (c) 2022 Juha Viitanen <juha.viitanen@exertus.fi>
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    http://www.eclipse.org/legal/epl-v10.html
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
+ *
+ * Contributors:
+ *    Juha Viitanen - initial implementation and documentation
+ *******************************************************************************/
 
+use bincode;
+use futures::{executor::block_on, stream::StreamExt};
+use paho_mqtt as mqtt;
+// use paho_mqtt::Message;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::{env, process, time::Duration};
+use std::{str, thread};
+use paho_mqtt::Message;
 //type V_VOID               0 /* void */
 type V_BIT                 = u32; /* bit */
 type V_SIGNED_CHAR        = i8; /* signed char */
@@ -24,13 +45,14 @@ type V_STRING             = str; /* string */
 //type V_UNSIGNED_LONG_LONG 19 /* unsigned __int64 */
 //type V_DOUBLE             20 /* double */
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
     ConversionError,
     ConversionNotDefined
 }
 
 
-
+#[derive(Debug)]
 pub enum Packets {
 	EMT_DATA_SIGNAL_MESSAGE,
 	EMT_DATA_COLLECTION_TABLE_MESSAGE,
@@ -60,6 +82,85 @@ pub struct OwnDataSignalPacket {
 	//data:data,
 
 	//signals:[u8;996], // sisaltaa DataSignalSampleja
+}
+
+impl Default for OwnDataSignalPacket {
+    fn default () -> OwnDataSignalPacket {
+        OwnDataSignalPacket {
+            packet_length: 0,                             // Paketin kokonaispituus
+            packet_id: EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
+            sample_packet_length: 0,                      // pituus tavuina
+            signal_sample_type: 3, // current value, average, minimum or maximum, see SST_
+            signal_view_type: 0,
+            signal_number: 0,
+            signal_group: 100, // see DSG_
+            milliseconds: 0, // aikaleima millisekunteina vuodesta 1601
+            // datan pituus samplePacketLength - 16
+            data: Vec::new(),
+        }
+    }
+}
+
+impl OwnDataSignalPacket {
+    pub fn to_exmebus(&mut self, msg:&Message) -> Result<(Vec<u8>), MyError> {
+        let path = Path::new(msg.topic());
+        //let machine = path.file_name().unwrap().to_str().unwrap();
+        match path.file_name() {
+            Some(polku) => match polku.to_str() {
+                Some(macstr) => {
+                    let machine = macstr;
+                    println!("{machine:?}");
+                }
+                None => println!("failed to convert string"),
+            },
+            None => println!("failed to convert string"),
+        }
+
+        let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
+        match obj {
+            Ok(v) => {
+                self.signal_view_type = v["type"].as_u64().unwrap() as u8;
+                self.signal_number = v["id"].as_u64().unwrap() as u16;
+                self.milliseconds = v["ts"].as_str().unwrap().parse::<u64>().unwrap();
+                //    let parssi = v["value"].as_str();
+                match v["value"].as_str() {
+                    Some(x) => {
+                        let parsed = self.packdata(x);
+                        match parsed {
+                            Ok(pars) => {
+                                self.data = pars;
+                                //let serialized = serde_json::to_string(&sample2).unwrap();
+                                //println!("serialized = {}", serialized);
+                                match bincode::serialize(&self) {
+                                    Ok(bincoded) => {
+                                        let bytes = bincoded;
+                                        println!("{:?} {}", bytes, bytes.len());
+                                        return Ok(bytes);
+                                    }
+                                    Err(e) => {
+                                        println!("error{e:?}");
+                                        return Err(MyError::ConversionNotDefined);
+                                    },
+                                }
+                            }
+                            Err(e) =>  {
+                                println!("error");
+                                return Err(MyError::ConversionNotDefined);
+                            }
+                        }
+                    }
+                    None => { 
+                        println!("failed to convert string");
+                        return Err(MyError::ConversionNotDefined);
+                    }
+                }
+            }
+            Err(e) => { 
+                println!("error{e:?}");
+                return Err(MyError::ConversionNotDefined);
+            }
+        }
+    }
 }
 
 impl OwnDataSignalPacket {
