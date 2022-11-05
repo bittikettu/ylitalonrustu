@@ -18,21 +18,21 @@ use bincode;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 // use paho_mqtt::Message;
+use paho_mqtt::Message;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::{env, process, time::Duration};
 use std::{str, thread};
-use paho_mqtt::Message;
 //type V_VOID               0 /* void */
-type V_BIT                 = u32; /* bit */
-type V_SIGNED_CHAR        = i8; /* signed char */
-type V_SIGNED_SHORT       = i16; /* signed short */
-type V_SIGNED_LONG        = i32; /* signed long */
-type V_UNSIGNED_CHAR      = u8; /* unsigned char */
-type V_UNSIGNED_SHORT     = u16; /* unsigned short */
-type V_UNSIGNED_LONG      = u32; /* unsigned long */
-type V_FLOAT              = f32; /* float */
-type V_STRING             = str; /* string */
+type V_BIT = u32; /* bit */
+type V_SIGNED_CHAR = i8; /* signed char */
+type V_SIGNED_SHORT = i16; /* signed short */
+type V_SIGNED_LONG = i32; /* signed long */
+type V_UNSIGNED_CHAR = u8; /* unsigned char */
+type V_UNSIGNED_SHORT = u16; /* unsigned short */
+type V_UNSIGNED_LONG = u32; /* unsigned long */
+type V_FLOAT = f32; /* float */
+type V_STRING = str; /* string */
 //type V_HEX                10 /* hex */
 //type V_BINARY             11 /* binary */
 //type V_BE_SIGNED_SHORT    12 /* big-endian signed short */
@@ -44,7 +44,6 @@ type V_STRING             = str; /* string */
 //type V_SIGNED_LONG_LONG   18 /* __int64 */
 //type V_UNSIGNED_LONG_LONG 19 /* unsigned __int64 */
 //type V_DOUBLE             20 /* double */
-
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
     ConversionError,
@@ -52,50 +51,48 @@ pub enum MyError {
     PreliminaryDataNotValid,
 }
 
-
 #[derive(Debug)]
 pub enum Packets {
-	EMT_DATA_SIGNAL_MESSAGE,
-	EMT_DATA_COLLECTION_TABLE_MESSAGE,
-	EMT_DATA_SIGNAL_DEFINITION_MESSAGE,
-	EMT_OWN_DATA_SIGNAL_MESSAGE
+    EMT_DATA_SIGNAL_MESSAGE,
+    EMT_DATA_COLLECTION_TABLE_MESSAGE,
+    EMT_DATA_SIGNAL_DEFINITION_MESSAGE,
+    EMT_OWN_DATA_SIGNAL_MESSAGE,
 }
 
 //const EMT_DATA_SIGNAL_MESSAGE:&u8 = 18;
 //const EMT_DATA_COLLECTION_TABLE_MESSAGE:&u8 = 19;
 //const EMT_DATA_SIGNAL_DEFINITION_MESSAGE:&u8 = 20;
-pub const EMT_OWN_DATA_SIGNAL_MESSAGE:u16 = 21;
-
+pub const EMT_OWN_DATA_SIGNAL_MESSAGE: u16 = 21;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OwnDataSignalPacket {
-	packet_length:u16, // Paketin kokonaispituus
-	packet_id:u16, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-	sample_packet_length:u16, // pituus tavuina
-    signal_view_type:u8,
-	signal_sample_type:u8, // current value, average, minimum or maximum, see SST_
-	signal_number:u16,
-	signal_group:u16, // see DSG_
-	milliseconds:u64, // aikaleima millisekunteina vuodesta 1601
-	// datan pituus samplePacketLength - 16
-	//data:[u8;MAX_N],
+    packet_length: u16,        // Paketin kokonaispituus
+    packet_id: u16,            // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
+    sample_packet_length: u16, // pituus tavuina
+    signal_view_type: u8,
+    signal_sample_type: u8, // current value, average, minimum or maximum, see SST_
+    signal_number: u16,
+    signal_group: u16, // see DSG_
+    milliseconds: u64, // aikaleima millisekunteina vuodesta 1601
+    // datan pituus samplePacketLength - 16
+    //data:[u8;MAX_N],
     data: Vec<u8>,
-	//data:data,
+    //data:data,
 
-	//signals:[u8;996], // sisaltaa DataSignalSampleja
+    //signals:[u8;996], // sisaltaa DataSignalSampleja
 }
 
 impl Default for OwnDataSignalPacket {
-    fn default () -> OwnDataSignalPacket {
+    fn default() -> OwnDataSignalPacket {
         OwnDataSignalPacket {
-            packet_length: 0,                             // Paketin kokonaispituus
+            packet_length: 0,                       // Paketin kokonaispituus
             packet_id: EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-            sample_packet_length: 0,                      // pituus tavuina
+            sample_packet_length: 0,                // pituus tavuina
             signal_sample_type: 3, // current value, average, minimum or maximum, see SST_
             signal_view_type: 0,
             signal_number: 0,
             signal_group: 100, // see DSG_
-            milliseconds: 0, // aikaleima millisekunteina vuodesta 1601
+            milliseconds: 0,   // aikaleima millisekunteina vuodesta 1601
             // datan pituus samplePacketLength - 16
             data: Vec::new(),
         }
@@ -103,7 +100,7 @@ impl Default for OwnDataSignalPacket {
 }
 
 impl OwnDataSignalPacket {
-    pub fn to_exmebus(&mut self, msg:&Message) -> Result<(Vec<u8>), MyError> {
+    pub fn to_exmebus(&mut self, msg: &Message) -> Result<(Vec<u8>), MyError> {
         let path = Path::new(msg.topic());
         match path.file_name() {
             Some(polku) => match polku.to_str() {
@@ -119,27 +116,24 @@ impl OwnDataSignalPacket {
         let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
         match obj {
             Ok(v) => {
-                
                 match v["type"].as_u64() {
                     Some(value) => self.signal_view_type = value as u8,
-                    None => return Err(MyError::PreliminaryDataNotValid)
+                    None => return Err(MyError::PreliminaryDataNotValid),
                 }
 
-                match v["id"].as_u64()  {
+                match v["id"].as_u64() {
                     Some(value) => self.signal_number = value as u16,
-                    None => return Err(MyError::PreliminaryDataNotValid)
+                    None => return Err(MyError::PreliminaryDataNotValid),
                 }
 
                 match v["ts"].as_str() {
-                    Some(value) => {
-                        match value.parse::<u64>() {
-                            Ok(value) => self.milliseconds = value,
-                            Err(e) => return Err(MyError::PreliminaryDataNotValid)
-                        }
+                    Some(value) => match value.parse::<u64>() {
+                        Ok(value) => self.milliseconds = value,
+                        Err(e) => return Err(MyError::PreliminaryDataNotValid),
                     },
-                    None => return Err(MyError::PreliminaryDataNotValid)
+                    None => return Err(MyError::PreliminaryDataNotValid),
                 }
-                
+
                 match v["value"].as_str() {
                     Some(x) => {
                         let parsed = self.packdata(x);
@@ -151,29 +145,29 @@ impl OwnDataSignalPacket {
                                     Ok(bincoded) => {
                                         let bytes = bincoded;
                                         self.packet_length = bytes.len() as u16;
-                                        self.sample_packet_length = self.sample_packet_length - 16;
+                                        self.sample_packet_length = self.packet_length - 16;
                                         //println!("{:?} {}", bytes, bytes.len());
                                         return Ok(bincode::serialize(&self).unwrap());
                                     }
                                     Err(e) => {
                                         println!("error{e:?}");
                                         return Err(MyError::ConversionNotDefined);
-                                    },
+                                    }
                                 }
                             }
-                            Err(e) =>  {
+                            Err(e) => {
                                 println!("error");
                                 return Err(MyError::ConversionNotDefined);
                             }
                         }
                     }
-                    None => { 
+                    None => {
                         println!("failed to convert string");
                         return Err(MyError::ConversionNotDefined);
                     }
                 }
             }
-            Err(e) => { 
+            Err(e) => {
                 println!("error{e:?}");
                 return Err(MyError::ConversionNotDefined);
             }
@@ -182,65 +176,48 @@ impl OwnDataSignalPacket {
 }
 
 impl OwnDataSignalPacket {
-    pub fn packdata(&mut self, value:&str) -> Result<Vec<u8>, MyError> {
+    pub fn packdata(&mut self, value: &str) -> Result<Vec<u8>, MyError> {
         let mut retvec: Vec<u8> = Vec::new();
-        println!("type: {} value: {}",self.signal_sample_type, value);
+        println!("type: {} value: {}", self.signal_sample_type, value);
         match self.signal_view_type {
-            1 => {
-                match value.parse::<u32>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            1 => match value.parse::<u32>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            2 => {
-                match value.parse::<i8>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            2 => match value.parse::<i8>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            3 => {
-                match value.parse::<i16>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            3 => match value.parse::<i16>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            4 => {
-                match value.parse::<i32>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            4 => match value.parse::<i32>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            5 => {
-                match value.parse::<u8>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            5 => match value.parse::<u8>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            6 => {
-                match value.parse::<u16>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            6 => match value.parse::<u16>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            7 => {
-                match value.parse::<u32>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            7 => match value.parse::<u32>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
-            8 => {
-                match value.parse::<f32>() {
-                    Ok(v) => retvec = v.to_be_bytes().to_vec(),
-                    Err(e) => println!("error {e:?}"),
-                }
+            8 => match value.parse::<f32>() {
+                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Err(e) => println!("error {e:?}"),
             },
             9 => {
                 retvec = value.as_bytes().to_vec();
-                
-            },
+            }
             0 => {
                 return Err(MyError::ConversionNotDefined);
-            },
+            }
             _ => {
                 return Err(MyError::ConversionNotDefined);
             }

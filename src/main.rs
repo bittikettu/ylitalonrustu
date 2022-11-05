@@ -108,11 +108,12 @@ fn main() {
                     print!("(R) ");
                 }
                 println!("{}", msg);
-                let mut sample2 = exme::OwnDataSignalPacket::default(); 
+                let mut sample2 = exme::OwnDataSignalPacket::default();
 
                 match sample2.to_exmebus(&msg) {
-                    // Ok(bytes) => println!("{:?} {}", bytes, bytes.len()),
-                    Ok(bytes) => println!("{:?}", bytes),
+                    Ok(bytes) => {
+                        println!("{:?} {}", bytes, bytes.len());
+                    }
                     Err(e) => {
                         println!("error{e:?}");
                     }
