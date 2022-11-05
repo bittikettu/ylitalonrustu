@@ -49,40 +49,40 @@ fn main() {
         DFLT_BROKER.to_string()
     );
 
-    let mut sample = exme::OwnDataSignalPacket {
-	 	packet_length:66, // Paketin kokonaispituus
-		packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-		sample_packet_length:32, // pituus tavuina
-        signal_view_type:2,
-		signal_sample_type:0, // current value, average, minimum or maximum, see SST_
-		signal_number:1000,
-		signal_group:100, // see DSG_
-		milliseconds:123123, // aikaleima millisekunteina vuodesta 1601
-		// datan pituus samplePacketLength - 16
+    // let mut sample = exme::OwnDataSignalPacket {
+	//  	packet_length:66, // Paketin kokonaispituus
+	// 	packet_id:21, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
+	// 	sample_packet_length:32, // pituus tavuina
+    //     signal_view_type:2,
+	// 	signal_sample_type:0, // current value, average, minimum or maximum, see SST_
+	// 	signal_number:1000,
+	// 	signal_group:100, // see DSG_
+	// 	milliseconds:123123, // aikaleima millisekunteina vuodesta 1601
+	// 	// datan pituus samplePacketLength - 16
 		
-        data:Vec::new(),
-    };
+    //     data:Vec::new(),
+    // };
     
-    sample.packdata("1");
-    //let value: u64 = 0x1FFFF;
-    let derp = "Testirimpsutekstihommeli";
-    //let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
-    //let hep = derp.as_bytes();
-    //sample.data.to_vec(bytes);
-    sample.data = derp.as_bytes().to_vec();//bytes.to_vec();
-    sample.data.push(0);
+    // sample.packdata("1");
+    // //let value: u64 = 0x1FFFF;
+    // let derp = "Testirimpsutekstihommeli";
+    // //let bytes = derp.as_bytes().to_vec().push(0);//value.to_be_bytes();
+    // //let hep = derp.as_bytes();
+    // //sample.data.to_vec(bytes);
+    // sample.data = derp.as_bytes().to_vec();//bytes.to_vec();
+    // sample.data.push(0);
 
-    let s = match str::from_utf8(&sample.data) {
-        Ok(v) => v,
-        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-    };
+    // let s = match str::from_utf8(&sample.data) {
+    //     Ok(v) => v,
+    //     Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    // };
 
-    //sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
-    println!("serialized = {}", s);
-    let serialized = serde_json::to_string(&sample).unwrap();
+    // //sample.data[..bytes.len()].copy_from_slice(&value.to_be_bytes()[..bytes.len()]);
+    // println!("serialized = {}", s);
+    // let serialized = serde_json::to_string(&sample).unwrap();
 
-    // Prints serialized = {"x":1,"y":2}
-    println!("serialized = {}", serialized);
+    // // Prints serialized = {"x":1,"y":2}
+    // println!("serialized = {}", serialized);
 
     // Define the set of options for the create.
     // Use an ID for a persistent session.
@@ -141,7 +141,7 @@ fn main() {
                     //println!("{:?}",v["id"].as_u64().unwrap() as u16);
                     //println!("{}",v["ts"].as_str().unwrap().parse::<u64>().unwrap());
                     //println!("{:?}",v["value"].as_u64().unwrap() as u8);
-                    
+
                     let mut sample2 = exme::OwnDataSignalPacket {
                         packet_length:0, // Paketin kokonaispituus
                         packet_id:exme::EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
@@ -154,17 +154,22 @@ fn main() {
                         // datan pituus samplePacketLength - 16
                         data:Vec::new(),
                    };
-
-                   let parsed = sample2.packdata(v["value"].as_str().unwrap());
-                   match parsed {
-                    Ok(v) => {
-                        sample2.data = v;
-                        let serialized = serde_json::to_string(&sample2).unwrap();
-                        println!("serialized = {}", serialized);
-                        let bytes = bincode::serialize(&sample2).unwrap();
-                        println!("{:?} {}", bytes,bytes.len());
+                //    let parssi = v["value"].as_str();
+                   match v["value"].as_str() {
+                    Some(x) => {
+                        let parsed = sample2.packdata(x);
+                        match parsed {
+                         Ok(v) => {
+                             sample2.data = v;
+                             let serialized = serde_json::to_string(&sample2).unwrap();
+                             println!("serialized = {}", serialized);
+                             let bytes = bincode::serialize(&sample2).unwrap();
+                             println!("{:?} {}", bytes,bytes.len());
+                         },
+                         Err(e) => println!("error"),
+                        }
                     },
-                    Err(e) => println!("error"),
+                    None => println!("failed to convert string"),
                    }
                 },
                 Err(e) => println!("error{e:?}"),
