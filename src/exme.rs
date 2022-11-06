@@ -15,24 +15,21 @@
  *******************************************************************************/
 
 use bincode;
-use futures::{executor::block_on, stream::StreamExt};
-use paho_mqtt as mqtt;
-// use paho_mqtt::Message;
 use paho_mqtt::Message;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::{env, process, time::Duration};
-use std::{str, thread};
+
+use std::{str};
 //type V_VOID               0 /* void */
-type V_BIT = u32; /* bit */
-type V_SIGNED_CHAR = i8; /* signed char */
-type V_SIGNED_SHORT = i16; /* signed short */
-type V_SIGNED_LONG = i32; /* signed long */
-type V_UNSIGNED_CHAR = u8; /* unsigned char */
-type V_UNSIGNED_SHORT = u16; /* unsigned short */
-type V_UNSIGNED_LONG = u32; /* unsigned long */
-type V_FLOAT = f32; /* float */
-type V_STRING = str; /* string */
+//type V_BIT = u32; /* bit */
+//type V_SIGNED_CHAR = i8; /* signed char */
+//type V_SIGNED_SHORT = i16; /* signed short */
+//type V_SIGNED_LONG = i32; /* signed long */
+//type V_UNSIGNED_CHAR = u8; /* unsigned char */
+//type V_UNSIGNED_SHORT = u16; /* unsigned short */
+//type V_UNSIGNED_LONG = u32; /* unsigned long */
+//type V_FLOAT = f32; /* float */
+//type V_STRING = str; /* string */
 //type V_HEX                10 /* hex */
 //type V_BINARY             11 /* binary */
 //type V_BE_SIGNED_SHORT    12 /* big-endian signed short */
@@ -51,13 +48,13 @@ pub enum MyError {
     PreliminaryDataNotValid,
 }
 
-#[derive(Debug)]
-pub enum Packets {
-    EMT_DATA_SIGNAL_MESSAGE,
-    EMT_DATA_COLLECTION_TABLE_MESSAGE,
-    EMT_DATA_SIGNAL_DEFINITION_MESSAGE,
-    EMT_OWN_DATA_SIGNAL_MESSAGE,
-}
+//#[derive(Debug)]
+//pub enum Packets {
+//    EMT_DATA_SIGNAL_MESSAGE,
+//    EMT_DATA_COLLECTION_TABLE_MESSAGE,
+//    EMT_DATA_SIGNAL_DEFINITION_MESSAGE,
+//    EMT_OWN_DATA_SIGNAL_MESSAGE,
+//}
 
 //const EMT_DATA_SIGNAL_MESSAGE:&u8 = 18;
 //const EMT_DATA_COLLECTION_TABLE_MESSAGE:&u8 = 19;
@@ -100,7 +97,7 @@ impl Default for OwnDataSignalPacket {
 }
 
 impl OwnDataSignalPacket {
-    pub fn to_exmebus(&mut self, msg: &Message) -> Result<(Vec<u8>), MyError> {
+    pub fn to_exmebus(&mut self, msg: &Message) -> Result<Vec<u8>, MyError> {
         let path = Path::new(msg.topic());
         match path.file_name() {
             Some(polku) => match polku.to_str() {
@@ -129,7 +126,10 @@ impl OwnDataSignalPacket {
                 match v["ts"].as_str() {
                     Some(value) => match value.parse::<u64>() {
                         Ok(value) => self.milliseconds = value,
-                        Err(e) => return Err(MyError::PreliminaryDataNotValid),
+                        Err(e) => { 
+                            println!("error{e:?}");
+                            return Err(MyError::PreliminaryDataNotValid);
+                        }
                     },
                     None => return Err(MyError::PreliminaryDataNotValid),
                 }
@@ -155,7 +155,7 @@ impl OwnDataSignalPacket {
                                 }
                             }
                             Err(e) => {
-                                println!("error");
+                                println!("error{e:?}");
                                 return Err(MyError::ConversionNotDefined);
                             }
                         }

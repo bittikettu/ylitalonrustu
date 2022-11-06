@@ -33,14 +33,9 @@
  *    Frank Pagliughi - initial implementation and documentation
  *******************************************************************************/
 
-use bincode;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
-use serde::{Deserialize, Serialize};
-use serde_json::{Result, Value};
-use std::path::Path;
-use std::{env, process, time::Duration};
-use std::{str, thread};
+use std::{str,env, process, time::Duration};
 mod exme;
 
 // The topics to which we subscribe.
@@ -55,7 +50,7 @@ fn main() {
 
     let host = env::args()
         .nth(1)
-        .unwrap_or_else(|| "tcp://localhost:1883".to_string());
+        .unwrap_or_else(|| "tcp://10.3.1.132:1883".to_string());
 
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
