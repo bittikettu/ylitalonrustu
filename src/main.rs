@@ -37,6 +37,8 @@ use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 use std::{str,env, process, time::Duration};
 mod exme;
+use std::io::prelude::*;
+use std::net::TcpStream;
 
 // The topics to which we subscribe.
 const TOPICS: &[&str] = &["incoming/machine/+", "hello"];
@@ -96,7 +98,7 @@ fn main() {
         // disconnect. Therefore, when you kill this app (with a ^C or
         // whatever) the server will get an unexpected drop and then
         // should emit the LWT message.
-
+        let mut stream = TcpStream::connect("127.0.0.1:2048")?;
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
                 if msg.retained() {
@@ -107,7 +109,8 @@ fn main() {
 
                 match sample2.to_exmebus(&msg) {
                     Ok(bytes) => {
-                        println!("{:?} {}", bytes, bytes.len());
+                        println!("Full package {:?} len{}", bytes, bytes.len());
+                        stream.write(&bytes)?;
                     }
                     Err(e) => {
                         println!("error{e:?}");

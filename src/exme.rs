@@ -18,6 +18,7 @@ use bincode;
 use paho_mqtt::Message;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use serde::ser::{SerializeStruct, Serializer};
 
 use std::{str};
 //type V_VOID               0 /* void */
@@ -61,22 +62,19 @@ pub enum MyError {
 //const EMT_DATA_SIGNAL_DEFINITION_MESSAGE:&u8 = 20;
 pub const EMT_OWN_DATA_SIGNAL_MESSAGE: u16 = 21;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct OwnDataSignalPacket {
     packet_length: u16,        // Paketin kokonaispituus
     packet_id: u16,            // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
     sample_packet_length: u16, // pituus tavuina
-    signal_view_type: u8,
     signal_sample_type: u8, // current value, average, minimum or maximum, see SST_
+    signal_view_type: u8,
     signal_number: u16,
     signal_group: u16, // see DSG_
-    milliseconds: u64, // aikaleima millisekunteina vuodesta 1601
+    milliseconds: i64, // aikaleima millisekunteina vuodesta 1601
     // datan pituus samplePacketLength - 16
-    //data:[u8;MAX_N],
+    //#[serde(flatten)]
     data: Vec<u8>,
-    //data:data,
-
-    //signals:[u8;996], // sisaltaa DataSignalSampleja
 }
 
 impl Default for OwnDataSignalPacket {
@@ -95,6 +93,27 @@ impl Default for OwnDataSignalPacket {
         }
     }
 }
+
+// This is what #[derive(Serialize)] would generate.
+//impl Serialize for OwnDataSignalPacket {
+//    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//    where
+//        S: Serializer,
+//    {
+//        let mut s = serializer.serialize_struct("OwnDataSignalPacket", 9)?;
+//        s.serialize_field("packet_length", &self.packet_length)?;
+//        s.serialize_field("packet_id", &self.packet_id)?;
+//        s.serialize_field("sample_packet_length", &self.sample_packet_length)?;
+//        s.serialize_field("signal_sample_type", &self.sample_packet_length)?;
+//        s.serialize_field("signal_view_type", &self.sample_packet_length)?;
+//        s.serialize_field("signal_number", &self.sample_packet_length)?;
+//        s.serialize_field("signal_group", &self.sample_packet_length)?;
+//        s.serialize_field("milliseconds", &self.sample_packet_length)?;
+//        let flattened = &self.data;
+//        s.serialize_field("data", &self.data)?;
+//        s.end()
+//    }
+//}
 
 impl OwnDataSignalPacket {
     pub fn to_exmebus(&mut self, msg: &Message) -> Result<Vec<u8>, MyError> {
@@ -124,7 +143,7 @@ impl OwnDataSignalPacket {
                 }
 
                 match v["ts"].as_str() {
-                    Some(value) => match value.parse::<u64>() {
+                    Some(value) => match value.parse::<i64>() {
                         Ok(value) => self.milliseconds = value,
                         Err(e) => { 
                             println!("error{e:?}");
@@ -137,16 +156,19 @@ impl OwnDataSignalPacket {
                 match v["value"].as_str() {
                     Some(x) => {
                         let parsed = self.packdata(x);
+                        let flattened = self.packdata(x).into_iter().flatten().collect::<Vec<u8>>();
+                        println!("littana {:?}", flattened);
                         match parsed {
                             Ok(pars) => {
                                 self.data = pars;
 
                                 match bincode::serialize(&self) {
                                     Ok(bincoded) => {
-                                        self.packet_length = bincoded.len() as u16;
-                                        self.sample_packet_length = self.packet_length - 16;
-                                        //println!("{:?} {}", bytes, bytes.len());
-                                        return Ok(bincode::serialize(&self).unwrap());
+                                        // Some unknown territory how to actually serialize the struct with vec flattening.
+                                        self.packet_length = bincoded.len() as u16 - 8;
+                                        self.sample_packet_length = self.packet_length - 4;
+                                        let derp = bincode::serialize(&self).unwrap();
+                                        return Ok([&derp[0..20], &derp[28..derp.len()]].concat());
                                     }
                                     Err(e) => {
                                         println!("error{e:?}");
