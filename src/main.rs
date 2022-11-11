@@ -41,18 +41,27 @@ use std::io::prelude::*;
 use std::net::TcpStream;
 
 // The topics to which we subscribe.
-const TOPICS: &[&str] = &["incoming/machine/+", "hello"];
-const QOS: &[i32] = &[1, 1];
+
+const QOS: &[i32] = &[2];
 
 /////////////////////////////////////////////////////////////////////////////
 
 fn main() {
     // Initialize the logger from the environment
+
     env_logger::init();
 
-    let host = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "tcp://10.3.1.132:1883".to_string());
+
+    let host = "tcp://localhost:1893".to_string(); //env::args()
+        //.nth(1)
+        //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
+
+    let port = env::args().nth(1).unwrap_or_else(|| "2048".to_string());
+    let _topic = env::args().nth(2).unwrap_or_else(|| "trash".to_string());
+    
+    let topic = format!("incoming/machine/{_topic}/json");
+
+    //const TOPICS: &[&str] = &[format!("incoming/machine/{topic}/json").to_string()];
 
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
@@ -84,12 +93,17 @@ fn main() {
 
         // Make the connection to the broker
         println!("Connecting to the MQTT server...");
+        println!("Machine={topic}");
+        println!("Exmebusport={port}");
         cli.connect(conn_opts).await?;
 
-        println!("Subscribing to topics: {:?}", TOPICS);
-        let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published(); TOPICS.len()];
-        cli.subscribe_many_with_options(TOPICS, QOS, &sub_opts, None)
-            .await?;
+        //println!("Subscribing to topics: {:?}", TOPICS);
+        //let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published(); TOPICS.len()];
+        //cli.subscribe_many_with_options(TOPICS, QOS, &sub_opts, None)
+        //    .await?;
+
+        let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published()];
+        cli.subscribe_with_options(topic, 2, None, None).await?;
 
         // Just loop on incoming messages.
         println!("Waiting for messages...");
@@ -98,7 +112,9 @@ fn main() {
         // disconnect. Therefore, when you kill this app (with a ^C or
         // whatever) the server will get an unexpected drop and then
         // should emit the LWT message.
-        let mut stream = TcpStream::connect("127.0.0.1:2048")?;
+        
+        let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
+
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
                 if msg.retained() {
