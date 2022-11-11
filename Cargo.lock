@@ -466,7 +466,7 @@ checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 [[package]]
 name = "paho-mqtt"
 version = "0.11.1"
-source = "git+https://github.com/eclipse/paho.mqtt.rust.git#eee12c62aaba6309f95fb15ba1ebe1a2eb721e6e"
+source = "git+https://github.com/eclipse/paho.mqtt.rust.git?branch=master#eee12c62aaba6309f95fb15ba1ebe1a2eb721e6e"
 dependencies = [
  "async-channel",
  "crossbeam-channel",
@@ -481,7 +481,7 @@ dependencies = [
 [[package]]
 name = "paho-mqtt-sys"
 version = "0.7.0"
-source = "git+https://github.com/eclipse/paho.mqtt.rust.git#eee12c62aaba6309f95fb15ba1ebe1a2eb721e6e"
+source = "git+https://github.com/eclipse/paho.mqtt.rust.git?branch=master#eee12c62aaba6309f95fb15ba1ebe1a2eb721e6e"
 dependencies = [
  "cmake",
 ]

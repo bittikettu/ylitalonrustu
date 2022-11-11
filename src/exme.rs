@@ -204,35 +204,35 @@ impl OwnDataSignalPacket {
         }
         match self.signal_view_type {
             1 => match value.parse::<u8>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             2 => match value.parse::<i8>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             3 => match value.parse::<i16>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             4 => match value.parse::<i32>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             5 => match value.parse::<u8>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             6 => match value.parse::<u16>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             7 => match value.parse::<u32>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             8 => match value.parse::<f32>() {
-                Ok(v) => retvec = v.to_be_bytes().to_vec(),
+                Ok(v) => retvec = v.to_ne_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
             9 => {

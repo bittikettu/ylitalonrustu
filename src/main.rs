@@ -68,7 +68,7 @@ fn main() {
     let create_opts = mqtt::CreateOptionsBuilder::new()
         .mqtt_version(mqtt::MQTT_VERSION_5)
         .server_uri(host)
-        .client_id("rust_async_sub_v5")
+        .client_id(format!("mac_id_{_topic}"))
         .finalize();
 
     // Create the client connection
@@ -119,15 +119,14 @@ fn main() {
                 if msg.retained() {
                     print!("(R) ");
                 }
-                println!("{}", msg);
                 let mut sample2 = exme::OwnDataSignalPacket::default();
 
                 match sample2.to_exmebus(&msg) {
                     Ok(bytes) => {
                         if sample2.signal_view_type == 8 {
                             println!("Full package {:?} len{}", bytes, bytes.len());
+                            println!("{msg:?}");
                         }
-                        println!("{msg:?}");
                         stream.write(&bytes)?;
                     }
                     Err(e) => {
