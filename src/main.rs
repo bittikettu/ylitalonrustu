@@ -33,33 +33,34 @@
  *    Frank Pagliughi - initial implementation and documentation
  *******************************************************************************/
 
+use futures::future::OrElse;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 use std::{str,env, process, time::Duration};
 mod exme;
 use std::io::prelude::*;
 use std::net::TcpStream;
-
-// The topics to which we subscribe.
-
-const QOS: &[i32] = &[2];
-
-/////////////////////////////////////////////////////////////////////////////
+use uuid::Uuid;
 
 fn main() {
     // Initialize the logger from the environment
-
     env_logger::init();
-
-
+    let id = Uuid::new_v4();
+    let mut counter: u128 = 0;
     let host = "tcp://localhost:1893".to_string(); //env::args()
         //.nth(1)
         //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
 
     let port = env::args().nth(1).unwrap_or_else(|| "2048".to_string());
     let _topic = env::args().nth(2).unwrap_or_else(|| "trash".to_string());
-    
-    let topic = format!("incoming/machine/{_topic}/json");
+    let mode = env::args().nth(3).unwrap_or_else(|| "json".to_string());
+    let mut topic = String::new();
+    if mode == "json" {
+        topic = format!("incoming/machine/{_topic}/json");
+    }
+    else {
+        topic = format!("incoming/machine/{_topic}");
+    }
 
     //const TOPICS: &[&str] = &[format!("incoming/machine/{topic}/json").to_string()];
 
@@ -68,7 +69,7 @@ fn main() {
     let create_opts = mqtt::CreateOptionsBuilder::new()
         .mqtt_version(mqtt::MQTT_VERSION_5)
         .server_uri(host)
-        .client_id(format!("mac_id_{_topic}"))
+        .client_id(format!("mac_id_{_topic}_{port}"))
         .finalize();
 
     // Create the client connection
@@ -82,7 +83,7 @@ fn main() {
         let mut strm = cli.get_stream(50);
 
         // Define the set of options for the connection
-        let lwt = mqtt::Message::new("test", "Async subscriber lost connection", mqtt::QOS_1);
+        let lwt = mqtt::Message::new("status", format!("{_topic} on port {port} lost connection"), mqtt::QOS_2);
 
         let conn_opts = mqtt::ConnectOptionsBuilder::new()
             .mqtt_version(mqtt::MQTT_VERSION_5)
@@ -113,7 +114,7 @@ fn main() {
         // should emit the LWT message.
         
         let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
-
+        
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
                 if msg.retained() {
@@ -123,10 +124,12 @@ fn main() {
 
                 match sample2.to_exmebus(&msg) {
                     Ok(bytes) => {
-                        if sample2.signal_view_type == 8 {
+                        /*if sample2.signal_view_type == 8 {
                             println!("Full package {:?} len{}", bytes, bytes.len());
                             println!("{msg:?}");
-                        }
+                        }*/
+                        counter += 1;
+                        println!("{counter}");
                         stream.write(&bytes)?;
                     }
                     Err(e) => {

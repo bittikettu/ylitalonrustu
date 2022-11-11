@@ -49,6 +49,47 @@ pub enum MyError {
     PreliminaryDataNotValid,
 }
 
+pub enum DataSignalGroups {
+    Info,
+    Common,
+    Spn,
+    User = 100
+}
+
+pub enum SignalSampleTypes {
+    Current,
+    Average,
+    Minimum,
+    ChangeCount,
+    EnableCount,
+    DisableCount,
+    ValidCount
+}
+#[repr(u8)]
+pub enum ViewTypes {
+    V_VOID,               /* void */
+    V_BIT,                /* bit */
+    V_SIGNED_CHAR,        /* signed char */
+    V_SIGNED_SHORT,       /* signed short */
+    V_SIGNED_LONG,        /* signed long */
+    V_UNSIGNED_CHAR,      /* unsigned char */
+    V_UNSIGNED_SHORT,     /* unsigned short */
+    V_UNSIGNED_LONG,      /* unsigned long */
+    V_FLOAT,              /* float */
+    V_STRING,             /* string */
+    V_HEX,                /* hex */
+    V_BINARY,             /* binary */
+    V_BE_SIGNED_SHORT,    /* big-endian signed short */
+    V_BE_SIGNED_LONG,     /* big-endian signed long */
+    V_BE_UNSIGNED_SHORT,  /* big-endian unsigned short */
+    V_BE_UNSIGNED_LONG,   /* big-endian unsigned long */
+    V_UNIX_TIME,          /* unix time */
+    V_TWO_BIT,            /* J1939 two-bit discrete parameter */
+    V_SIGNED_LONG_LONG,   /* __int64 */
+    V_UNSIGNED_LONG_LONG, /* unsigned __int64 */
+    V_DOUBLE,             /* double */
+}
+
 //#[derive(Debug)]
 //pub enum Packets {
 //    EMT_DATA_SIGNAL_MESSAGE,
@@ -61,6 +102,8 @@ pub enum MyError {
 //const EMT_DATA_COLLECTION_TABLE_MESSAGE:&u8 = 19;
 //const EMT_DATA_SIGNAL_DEFINITION_MESSAGE:&u8 = 20;
 pub const EMT_OWN_DATA_SIGNAL_MESSAGE: u16 = 21;
+pub const SNIP_SNIP_VECTOR_HEADER: u16 = 8;
+pub const EXTRA_LEN_ADJUSTMENTS: u16 = 4;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct OwnDataSignalPacket {
@@ -72,8 +115,6 @@ pub struct OwnDataSignalPacket {
     signal_number: u16,
     signal_group: u16, // see DSG_
     milliseconds: i64, // aikaleima millisekunteina vuodesta 1601
-    // datan pituus samplePacketLength - 16
-    //#[serde(flatten)]
     data: Vec<u8>,
 }
 
@@ -83,10 +124,10 @@ impl Default for OwnDataSignalPacket {
             packet_length: 0,                       // Paketin kokonaispituus
             packet_id: EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
             sample_packet_length: 0,                // pituus tavuina
-            signal_sample_type: 3, // current value, average, minimum or maximum, see SST_
+            signal_sample_type: SignalSampleTypes::Current as u8, // current value, average, minimum or maximum, see SST_
             signal_view_type: 0,
             signal_number: 0,
-            signal_group: 100, // see DSG_
+            signal_group: DataSignalGroups::User as u16, // see DSG_
             milliseconds: 0,   // aikaleima millisekunteina vuodesta 1601
             // datan pituus samplePacketLength - 16
             data: Vec::new(),
@@ -94,31 +135,33 @@ impl Default for OwnDataSignalPacket {
     }
 }
 
-// This is what #[derive(Serialize)] would generate.
-//impl Serialize for OwnDataSignalPacket {
-//    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//    where
-//        S: Serializer,
-//    {
-//        let mut s = serializer.serialize_struct("OwnDataSignalPacket", 9)?;
-//        s.serialize_field("packet_length", &self.packet_length)?;
-//        s.serialize_field("packet_id", &self.packet_id)?;
-//        s.serialize_field("sample_packet_length", &self.sample_packet_length)?;
-//        s.serialize_field("signal_sample_type", &self.sample_packet_length)?;
-//        s.serialize_field("signal_view_type", &self.sample_packet_length)?;
-//        s.serialize_field("signal_number", &self.sample_packet_length)?;
-//        s.serialize_field("signal_group", &self.sample_packet_length)?;
-//        s.serialize_field("milliseconds", &self.sample_packet_length)?;
-//        let flattened = &self.data;
-//        s.serialize_field("data", &self.data)?;
-//        s.end()
-//    }
-//}
+impl OwnDataSignalPacket {
+    pub fn exmebusify(&mut self) -> Result<Vec<u8>, MyError> {
+        match bincode::serialize(&self) {
+            Ok(bincoded) => {
+                // Some unknown territory how to actually serialize the struct with vec flattening.
+                // Somehow this just works by snipping some vector serialization header away and calculating correct
+                // sizes for packages
+                self.packet_length = bincoded.len() as u16 - SNIP_SNIP_VECTOR_HEADER;
+                self.sample_packet_length = self.packet_length - EXTRA_LEN_ADJUSTMENTS;
+                let derp = bincode::serialize(&self).unwrap();
+                return Ok([&derp[0..20], &derp[28..derp.len()]].concat());
+            }
+            Err(e) => {
+                println!("error{e:?}");
+                return Err(MyError::ConversionNotDefined);
+            }
+        }
+    }
+}
 
 impl OwnDataSignalPacket {
     pub fn to_exmebus(&mut self, msg: &Message) -> Result<Vec<u8>, MyError> {
-        let path = Path::new(msg.topic());
-        match path.file_name() {
+        // If there is a need for parsing the "path" at some point
+        //let path = Path::new(msg.topic());
+        //let comps = path.components();
+        //println!("{:?}",comps);
+        /*match path.file_name() {
             Some(polku) => match polku.to_str() {
                 Some(macstr) => {
                     let machine = macstr;
@@ -127,7 +170,7 @@ impl OwnDataSignalPacket {
                 None => println!("failed to convert string"),
             },
             None => println!("failed to convert string"),
-        }
+        }*/
 
         let obj = serde_json::from_str::<serde_json::Value>(&msg.payload_str());
         match obj {
@@ -156,23 +199,13 @@ impl OwnDataSignalPacket {
                 match v["value"].as_str() {
                     Some(x) => {
                         let parsed = self.packdata(x);
-                        //let flattened = self.packdata(x).into_iter().flatten().collect::<Vec<u8>>();
-                        //println!("littana {:?}", flattened);
                         match parsed {
                             Ok(pars) => {
                                 self.data = pars;
-
-                                match bincode::serialize(&self) {
-                                    Ok(bincoded) => {
-                                        // Some unknown territory how to actually serialize the struct with vec flattening.
-                                        self.packet_length = bincoded.len() as u16 - 8;
-                                        self.sample_packet_length = self.packet_length - 4;
-                                        let derp = bincode::serialize(&self).unwrap();
-                                        return Ok([&derp[0..20], &derp[28..derp.len()]].concat());
-                                    }
-                                    Err(e) => {
-                                        println!("error{e:?}");
-                                        return Err(MyError::ConversionNotDefined);
+                                match self.exmebusify() {
+                                    Ok(val) => return Ok(val),
+                                    Err(e) => { 
+                                        return Err(e);
                                     }
                                 }
                             }
@@ -199,9 +232,7 @@ impl OwnDataSignalPacket {
 impl OwnDataSignalPacket {
     pub fn packdata(&mut self, value: &str) -> Result<Vec<u8>, MyError> {
         let mut retvec: Vec<u8> = Vec::new();
-        if self.signal_view_type == 8 {
-            println!("type: {} value: {}", self.signal_sample_type, value);
-        }
+
         match self.signal_view_type {
             1 => match value.parse::<u8>() {
                 Ok(v) => retvec = v.to_ne_bytes().to_vec(),
