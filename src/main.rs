@@ -79,7 +79,7 @@ fn main() {
 
     if let Err(err) = block_on(async {
         // Get message stream before connecting.
-        let mut strm = cli.get_stream(25);
+        let mut strm = cli.get_stream(50);
 
         // Define the set of options for the connection
         let lwt = mqtt::Message::new("test", "Async subscriber lost connection", mqtt::QOS_1);
@@ -102,9 +102,8 @@ fn main() {
         //cli.subscribe_many_with_options(TOPICS, QOS, &sub_opts, None)
         //    .await?;
 
-        let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published()];
-        cli.subscribe_with_options(topic, 2, None, None).await?;
-
+        //let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published()];
+        cli.subscribe_with_options(topic, 2, mqtt::SubscribeOptions::with_retain_as_published(), None).await?;
         // Just loop on incoming messages.
         println!("Waiting for messages...");
 
@@ -125,7 +124,10 @@ fn main() {
 
                 match sample2.to_exmebus(&msg) {
                     Ok(bytes) => {
-                        println!("Full package {:?} len{}", bytes, bytes.len());
+                        if sample2.signal_view_type == 8 {
+                            println!("Full package {:?} len{}", bytes, bytes.len());
+                        }
+                        println!("{msg:?}");
                         stream.write(&bytes)?;
                     }
                     Err(e) => {

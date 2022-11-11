@@ -68,7 +68,7 @@ pub struct OwnDataSignalPacket {
     packet_id: u16,            // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
     sample_packet_length: u16, // pituus tavuina
     signal_sample_type: u8, // current value, average, minimum or maximum, see SST_
-    signal_view_type: u8,
+    pub signal_view_type: u8,
     signal_number: u16,
     signal_group: u16, // see DSG_
     milliseconds: i64, // aikaleima millisekunteina vuodesta 1601
@@ -122,7 +122,7 @@ impl OwnDataSignalPacket {
             Some(polku) => match polku.to_str() {
                 Some(macstr) => {
                     let machine = macstr;
-                    println!("{machine:?}");
+                    //println!("{machine:?}");
                 }
                 None => println!("failed to convert string"),
             },
@@ -156,8 +156,8 @@ impl OwnDataSignalPacket {
                 match v["value"].as_str() {
                     Some(x) => {
                         let parsed = self.packdata(x);
-                        let flattened = self.packdata(x).into_iter().flatten().collect::<Vec<u8>>();
-                        println!("littana {:?}", flattened);
+                        //let flattened = self.packdata(x).into_iter().flatten().collect::<Vec<u8>>();
+                        //println!("littana {:?}", flattened);
                         match parsed {
                             Ok(pars) => {
                                 self.data = pars;
@@ -199,7 +199,9 @@ impl OwnDataSignalPacket {
 impl OwnDataSignalPacket {
     pub fn packdata(&mut self, value: &str) -> Result<Vec<u8>, MyError> {
         let mut retvec: Vec<u8> = Vec::new();
-        println!("type: {} value: {}", self.signal_sample_type, value);
+        if self.signal_view_type == 8 {
+            println!("type: {} value: {}", self.signal_sample_type, value);
+        }
         match self.signal_view_type {
             1 => match value.parse::<u8>() {
                 Ok(v) => retvec = v.to_be_bytes().to_vec(),
@@ -235,7 +237,7 @@ impl OwnDataSignalPacket {
             },
             9 => {
                 retvec = value.as_bytes().to_vec();
-                retvec.push(0);
+                //retvec.push(0);
             }
             0 => {
                 return Err(MyError::ConversionNotDefined);
