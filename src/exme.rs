@@ -201,7 +201,7 @@ impl OwnDataSignalPacket {
         let mut retvec: Vec<u8> = Vec::new();
         println!("type: {} value: {}", self.signal_sample_type, value);
         match self.signal_view_type {
-            1 => match value.parse::<u32>() {
+            1 => match value.parse::<u8>() {
                 Ok(v) => retvec = v.to_be_bytes().to_vec(),
                 Err(e) => println!("error {e:?}"),
             },
@@ -235,6 +235,7 @@ impl OwnDataSignalPacket {
             },
             9 => {
                 retvec = value.as_bytes().to_vec();
+                retvec.push(0);
             }
             0 => {
                 return Err(MyError::ConversionNotDefined);
@@ -242,8 +243,7 @@ impl OwnDataSignalPacket {
             _ => {
                 return Err(MyError::ConversionNotDefined);
             }
-        }
-        retvec.push(0);
+        }        
         return Ok(retvec);
     }
 }
