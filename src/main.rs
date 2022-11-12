@@ -33,20 +33,20 @@
  *    Frank Pagliughi - initial implementation and documentation
  *******************************************************************************/
 
-use futures::future::OrElse;
+//use futures::future::OrElse;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
-use std::{str,env, process, time::Duration};
+use std::{env, process, time::Duration};
 mod exme;
 use std::io::prelude::*;
 use std::net::TcpStream;
-use uuid::Uuid;
+use crate::exme::to_exmebus_better;
 
 fn main() {
     // Initialize the logger from the environment
     env_logger::init();
-    let id = Uuid::new_v4();
-    let mut counter: u128 = 0;
+    //let id = Uuid::new_v4();
+    //let mut counter: u128 = 0;
     let host = "tcp://localhost:1893".to_string(); //env::args()
         //.nth(1)
         //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
@@ -54,6 +54,7 @@ fn main() {
     let port = env::args().nth(1).unwrap_or_else(|| "2048".to_string());
     let _topic = env::args().nth(2).unwrap_or_else(|| "trash".to_string());
     let mode = env::args().nth(3).unwrap_or_else(|| "json".to_string());
+    
     let mut topic = String::new();
     if mode == "json" {
         topic = format!("incoming/machine/{_topic}/json");
@@ -120,7 +121,16 @@ fn main() {
                 if msg.retained() {
                     print!("(R) ");
                 }
-                let mut sample2 = exme::OwnDataSignalPacket::default();
+                match to_exmebus_better(&msg.payload_str()) {
+                    Ok(retvec) => {
+                        for mut emsg in retvec {
+                            let bytes = emsg.exmebusify().unwrap();
+                            stream.write(&bytes)?;
+                        }
+                    }
+                    Err(e) => println!("{:?}", e),
+                }
+                /*let mut sample2 = exme::OwnDataSignalPacket::default();
 
                 match sample2.to_exmebus(&msg) {
                     Ok(bytes) => {
@@ -135,7 +145,7 @@ fn main() {
                     Err(e) => {
                         println!("error{e:?}");
                     }
-                }
+                }*/
                 /* */
             } else {
                 // A "None" means we were disconnected. Try to reconnect...

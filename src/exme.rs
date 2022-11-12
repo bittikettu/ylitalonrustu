@@ -15,33 +15,12 @@
  *******************************************************************************/
 
 use bincode;
-use paho_mqtt::Message;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-use serde::ser::{SerializeStruct, Serializer};
+//use std::path::Path;
+use serde_json::Value;
 
 use std::{str};
-//type V_VOID               0 /* void */
-//type V_BIT = u32; /* bit */
-//type V_SIGNED_CHAR = i8; /* signed char */
-//type V_SIGNED_SHORT = i16; /* signed short */
-//type V_SIGNED_LONG = i32; /* signed long */
-//type V_UNSIGNED_CHAR = u8; /* unsigned char */
-//type V_UNSIGNED_SHORT = u16; /* unsigned short */
-//type V_UNSIGNED_LONG = u32; /* unsigned long */
-//type V_FLOAT = f32; /* float */
-//type V_STRING = str; /* string */
-//type V_HEX                10 /* hex */
-//type V_BINARY             11 /* binary */
-//type V_BE_SIGNED_SHORT    12 /* big-endian signed short */
-//type V_BE_SIGNED_LONG     13 /* big-endian signed long */
-//type V_BE_UNSIGNED_SHORT  14 /* big-endian unsigned short */
-//type V_BE_UNSIGNED_LONG   15 /* big-endian unsigned long */
-//type V_UNIX_TIME          16 /* unix time */
-//type V_TWO_BIT            17 /* J1939 two-bit discrete parameter */
-//type V_SIGNED_LONG_LONG   18 /* __int64 */
-//type V_UNSIGNED_LONG_LONG 19 /* unsigned __int64 */
-//type V_DOUBLE             20 /* double */
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
     ConversionError,
@@ -50,22 +29,23 @@ pub enum MyError {
 }
 
 pub enum DataSignalGroups {
-    Info,
-    Common,
-    Spn,
+    //Info,
+    //Common,
+    //Spn,
     User = 100
 }
 
 pub enum SignalSampleTypes {
     Current,
-    Average,
+    /*Average,
     Minimum,
     ChangeCount,
     EnableCount,
     DisableCount,
-    ValidCount
+    ValidCount*/
 }
 #[repr(u8)]
+#[allow(non_camel_case_types)]
 pub enum ViewTypes {
     V_VOID,               /* void */
     V_BIT,                /* bit */
@@ -90,20 +70,11 @@ pub enum ViewTypes {
     V_DOUBLE,             /* double */
 }
 
-//#[derive(Debug)]
-//pub enum Packets {
-//    EMT_DATA_SIGNAL_MESSAGE,
-//    EMT_DATA_COLLECTION_TABLE_MESSAGE,
-//    EMT_DATA_SIGNAL_DEFINITION_MESSAGE,
-//    EMT_OWN_DATA_SIGNAL_MESSAGE,
-//}
-
-//const EMT_DATA_SIGNAL_MESSAGE:&u8 = 18;
-//const EMT_DATA_COLLECTION_TABLE_MESSAGE:&u8 = 19;
-//const EMT_DATA_SIGNAL_DEFINITION_MESSAGE:&u8 = 20;
 pub const EMT_OWN_DATA_SIGNAL_MESSAGE: u16 = 21;
 pub const SNIP_SNIP_VECTOR_HEADER: u16 = 8;
 pub const EXTRA_LEN_ADJUSTMENTS: u16 = 4;
+pub const MAGIC_HEADER_OFFSET: usize = 20; // really this is the size of Owndatasignalpacket structure until better this is it.
+pub const MAGIC_HEADER_SKIP_VECTOR: usize = MAGIC_HEADER_OFFSET + SNIP_SNIP_VECTOR_HEADER as usize;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct OwnDataSignalPacket {
@@ -145,7 +116,7 @@ impl OwnDataSignalPacket {
                 self.packet_length = bincoded.len() as u16 - SNIP_SNIP_VECTOR_HEADER;
                 self.sample_packet_length = self.packet_length - EXTRA_LEN_ADJUSTMENTS;
                 let derp = bincode::serialize(&self).unwrap();
-                return Ok([&derp[0..20], &derp[28..derp.len()]].concat());
+                return Ok([&derp[0..MAGIC_HEADER_OFFSET], &derp[MAGIC_HEADER_SKIP_VECTOR..derp.len()]].concat());
             }
             Err(e) => {
                 println!("error{e:?}");
@@ -155,6 +126,104 @@ impl OwnDataSignalPacket {
     }
 }
 
+
+impl OwnDataSignalPacket {
+    fn val_to_datsignalpacket(&mut self, msg: &Value) -> Result<(), MyError> {
+        //match &msg as &str {
+        //    "type" => println!("derp"),
+        //    _ => println!("derps2"),
+        //}
+
+        match msg["type"].as_u64() {
+            Some(value) => self.signal_view_type = value as u8,
+            None => (), //return Err(MyError::PreliminaryDataNotValid),
+        }
+        match msg["dt"].as_u64() {
+            Some(value) => self.signal_view_type = value as u8,
+            None => (),
+        }
+        match msg["id"].as_u64() {
+            Some(value) => self.signal_number = value as u16,
+            None => (),
+        }
+
+        match msg["ts"].as_str() {
+            Some(value) => match value.parse::<i64>() {
+                Ok(value) => self.milliseconds = value,
+                Err(e) => {
+                    println!("error{e:?}");
+                    return Err(MyError::PreliminaryDataNotValid);
+                }
+            },
+            None => return Err(MyError::PreliminaryDataNotValid),
+        }
+
+        match msg["val"].as_str() {
+            Some(x) => {
+                let parsed = self.packdata(x);
+                match parsed {
+                    Ok(pars) => {
+                        self.data = pars;
+                        //self.exmebusify().unwrap();
+                        /*match self.exmebusify() {
+                            Ok(val) => return Ok(val),
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }*/
+                    }
+                    Err(e) => {
+                        println!("error{e:?}");
+                        return Err(MyError::ConversionNotDefined);
+                    }
+                }
+            }
+            None => {
+                println!("failed to convert string");
+                return Err(MyError::ConversionNotDefined);
+            }
+        }
+        Ok(())
+    }
+}
+
+pub fn to_exmebus_better(msg: &str) -> Result<Vec<OwnDataSignalPacket>, MyError> {
+    let obj = serde_json::from_str::<serde_json::Value>(&msg);
+    //println!("{:?}",obj);
+    match obj {
+        Ok(parsed) => {
+            let mut vec: Vec<OwnDataSignalPacket> = Vec::new();
+            //let mut sample2: OwnDataSignalPacket = OwnDataSignalPacket::default();
+            if parsed.is_array() {
+                for name in parsed.as_array() {
+                    for muu in name.iter() {
+                        let mut sample2: OwnDataSignalPacket = OwnDataSignalPacket::default();
+                        sample2.val_to_datsignalpacket(muu).unwrap();
+                        vec.push(sample2);
+                    }
+                }
+            }
+            if parsed.is_object() {
+                let mut conversion: Vec<Value> = Vec::new();
+                conversion.push(parsed);
+                for name in conversion {
+                    let mut sample2: OwnDataSignalPacket = OwnDataSignalPacket::default();
+                    sample2.val_to_datsignalpacket(&name).unwrap();
+                    vec.push(sample2);
+                }
+
+                //let mut sample2: OwnDataSignalPacket = OwnDataSignalPacket::default();
+                //sample2.val_to_datsignalpacket(parsed.to).unwrap();
+                //vec.push(sample2);
+            }
+            //println!("{:#?}", vec);
+            return Ok(vec);
+        }
+        Err(_e) => Err(MyError::PreliminaryDataNotValid),
+    }
+}
+
+/*
 impl OwnDataSignalPacket {
     pub fn to_exmebus(&mut self, msg: &Message) -> Result<Vec<u8>, MyError> {
         // If there is a need for parsing the "path" at some point
@@ -227,7 +296,7 @@ impl OwnDataSignalPacket {
             }
         }
     }
-}
+}*/
 
 impl OwnDataSignalPacket {
     pub fn packdata(&mut self, value: &str) -> Result<Vec<u8>, MyError> {
