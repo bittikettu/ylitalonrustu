@@ -47,6 +47,9 @@ fn main() {
     env_logger::init();
     //let id = Uuid::new_v4();
     //let mut counter: u128 = 0;
+    let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
+    println!("This binary was built from {}", version);
+    
     let host = "tcp://localhost:1893".to_string(); //env::args()
         //.nth(1)
         //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
@@ -54,7 +57,7 @@ fn main() {
     let port = env::args().nth(1).unwrap_or_else(|| "2048".to_string());
     let _topic = env::args().nth(2).unwrap_or_else(|| "trash".to_string());
     let mode = env::args().nth(3).unwrap_or_else(|| "json".to_string());
-    
+
     let mut topic = String::new();
     if mode == "json" {
         topic = format!("incoming/machine/{_topic}/json");
