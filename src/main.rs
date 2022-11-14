@@ -118,7 +118,11 @@ fn main() {
         // should emit the LWT message.
         
         let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
-        
+        match stream.set_write_timeout(Some(Duration::new(1, 0))) {
+            Ok(_) => println!("Timeout set"),
+            Err(e) => println!("Could not set timeout: {:?}", e),
+        }
+
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
                 if msg.retained() {
@@ -127,29 +131,27 @@ fn main() {
                 match to_exmebus_better(&msg.payload_str()) {
                     Ok(retvec) => {
                         for mut emsg in retvec {
-                            let bytes = emsg.exmebusify().unwrap();
-                            stream.write(&bytes)?;
+                            match emsg.exmebusify() {
+                                Ok(bt) => {
+                                    let mors = stream.write(&bt);
+                                    match mors {
+                                        Ok(v) => println!("wrote to stream; success={:?}", v),
+                                        Err(e) => { 
+                                            println!("Should be stored to redis {:?}", e);
+                                            stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
+                                            match stream.set_write_timeout(Some(Duration::new(1, 0))) {
+                                                Ok(_) => println!("Timeout set"),
+                                                Err(e) => println!("Could not set timeout: {:?}", e),
+                                            }
+                                        },
+                                    }
+                                },
+                                Err(e) => println!("{:?}", e),
+                            }                            
                         }
                     }
                     Err(e) => println!("{:?}", e),
                 }
-                /*let mut sample2 = exme::OwnDataSignalPacket::default();
-
-                match sample2.to_exmebus(&msg) {
-                    Ok(bytes) => {
-                        /*if sample2.signal_view_type == 8 {
-                            println!("Full package {:?} len{}", bytes, bytes.len());
-                            println!("{msg:?}");
-                        }*/
-                        counter += 1;
-                        println!("{counter}");
-                        stream.write(&bytes)?;
-                    }
-                    Err(e) => {
-                        println!("error{e:?}");
-                    }
-                }*/
-                /* */
             } else {
                 // A "None" means we were disconnected. Try to reconnect...
                 println!("Lost connection. Attempting reconnect.");
