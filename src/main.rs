@@ -135,7 +135,7 @@ fn main() {
                                 Ok(bt) => {
                                     let mors = stream.write(&bt);
                                     match mors {
-                                        Ok(v) => println!("wrote to stream; success={:?}", v),
+                                        Ok(_) => (), // Do not do anything when everything just works fine!
                                         Err(e) => { 
                                             println!("Should be stored to redis {:?}", e);
                                             stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
