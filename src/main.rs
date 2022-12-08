@@ -44,11 +44,11 @@ use crate::exme::to_exmebus_better;
 
 fn main() {
     // Initialize the logger from the environment
-    env_logger::init();
+    // env_logger::init();
     //let id = Uuid::new_v4();
     //let mut counter: u128 = 0;
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-    println!("This binary was built from {}", version);
+    println!("Version {}", version);
     
     let host = "tcp://localhost:1893".to_string(); //env::args()
         //.nth(1)
@@ -65,8 +65,6 @@ fn main() {
     else {
         topic = format!("incoming/machine/{_topic}");
     }
-
-    //const TOPICS: &[&str] = &[format!("incoming/machine/{topic}/json").to_string()];
 
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
