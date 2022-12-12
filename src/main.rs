@@ -38,21 +38,58 @@ use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 use std::{env, process, time::Duration};
 mod exme;
+use crate::exme::to_exmebus_better;
+use clap::{Parser, ValueEnum};
 use std::io::prelude::*;
 use std::net::TcpStream;
-use crate::exme::to_exmebus_better;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Topic of the MQTT-channel to listen
+    #[arg(long)]
+    topic: String,
+
+    /// Exmebus-port where to forward data
+    #[arg(long)]
+    exmebus_port: u64,
+
+    /// Local mqtt port, 1883 or something
+    #[arg(long)]
+    mqtt_port: u64,
+
+    /// MQTT-server address ie. tcp://localhost
+    #[arg(long)]
+    host: String,
+
+    /// Mode of the parser json/redi
+    #[arg(long, value_enum)]
+    mode: Mode,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Mode {
+    /// Convert incoming data from JSON to redi
+    json,
+    /// Convert incoming data from redi signals to redi (not implemented)
+    redi,
+}
 
 fn main() {
     // Initialize the logger from the environment
     // env_logger::init();
     //let id = Uuid::new_v4();
     //let mut counter: u128 = 0;
+    let args = Args::parse();
+
+    println!("{:?}", args);
+    // println!("Hello {}!", args);
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
     println!("Version {}", version);
-    
+
     let host = "tcp://localhost:1893".to_string(); //env::args()
-        //.nth(1)
-        //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
+                                                   //.nth(1)
+                                                   //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
 
     let port = env::args().nth(1).unwrap_or_else(|| "2048".to_string());
     let _topic = env::args().nth(2).unwrap_or_else(|| "trash".to_string());
@@ -61,8 +98,7 @@ fn main() {
     let mut topic = String::new();
     if mode == "json" {
         topic = format!("incoming/machine/{_topic}/json");
-    }
-    else {
+    } else {
         topic = format!("incoming/machine/{_topic}");
     }
 
@@ -85,7 +121,11 @@ fn main() {
         let mut strm = cli.get_stream(50);
 
         // Define the set of options for the connection
-        let lwt = mqtt::Message::new("status", format!("{_topic} on port {port} lost connection"), mqtt::QOS_2);
+        let lwt = mqtt::Message::new(
+            "status",
+            format!("{_topic} on port {port} lost connection"),
+            mqtt::QOS_2,
+        );
 
         let conn_opts = mqtt::ConnectOptionsBuilder::new()
             .mqtt_version(mqtt::MQTT_VERSION_5)
@@ -106,7 +146,13 @@ fn main() {
         //    .await?;
 
         //let sub_opts = vec![mqtt::SubscribeOptions::with_retain_as_published()];
-        cli.subscribe_with_options(topic, 2, mqtt::SubscribeOptions::with_retain_as_published(), None).await?;
+        cli.subscribe_with_options(
+            topic,
+            2,
+            mqtt::SubscribeOptions::with_retain_as_published(),
+            None,
+        )
+        .await?;
         // Just loop on incoming messages.
         println!("Waiting for messages...");
 
@@ -114,7 +160,7 @@ fn main() {
         // disconnect. Therefore, when you kill this app (with a ^C or
         // whatever) the server will get an unexpected drop and then
         // should emit the LWT message.
-        
+
         let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
         match stream.set_write_timeout(Some(Duration::new(1, 0))) {
             Ok(_) => println!("Timeout set"),
@@ -134,18 +180,23 @@ fn main() {
                                     let mors = stream.write(&bt);
                                     match mors {
                                         Ok(_) => (), // Do not do anything when everything just works fine!
-                                        Err(e) => { 
+                                        Err(e) => {
                                             println!("Should be stored to redis {:?}", e);
-                                            stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
-                                            match stream.set_write_timeout(Some(Duration::new(1, 0))) {
+                                            stream =
+                                                TcpStream::connect(format!("127.0.0.1:{port}"))?;
+                                            match stream
+                                                .set_write_timeout(Some(Duration::new(1, 0)))
+                                            {
                                                 Ok(_) => println!("Timeout set"),
-                                                Err(e) => println!("Could not set timeout: {:?}", e),
+                                                Err(e) => {
+                                                    println!("Could not set timeout: {:?}", e)
+                                                }
                                             }
-                                        },
+                                        }
                                     }
-                                },
+                                }
                                 Err(e) => println!("{:?}", e),
-                            }                            
+                            }
                         }
                     }
                     Err(e) => println!("{:?}", e),
