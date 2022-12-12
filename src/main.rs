@@ -46,7 +46,7 @@ use std::net::TcpStream;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Topic of the MQTT-channel to listen
+    /// Topic of the MQTT-channel to listen ie. incoming/machine/HD453/json
     #[arg(long)]
     topic: String,
 
@@ -62,6 +62,9 @@ struct Args {
     #[arg(long)]
     host: String,
 
+    #[arg(long)]
+    machine_id: String,
+
     /// Mode of the parser json/redi
     #[arg(long, value_enum)]
     mode: Mode,
@@ -70,9 +73,9 @@ struct Args {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Mode {
     /// Convert incoming data from JSON to redi
-    json,
+    JSON,
     /// Convert incoming data from redi signals to redi (not implemented)
-    redi,
+    Redi,
 }
 
 fn main() {
@@ -87,19 +90,16 @@ fn main() {
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
     println!("Version {}", version);
 
-    let host = "tcp://localhost:1893".to_string(); //env::args()
-                                                   //.nth(1)
-                                                   //.unwrap_or_else(|| "tcp://localhost:1893".to_string());
-
-    let port = env::args().nth(1).unwrap_or_else(|| "2048".to_string());
-    let _topic = env::args().nth(2).unwrap_or_else(|| "trash".to_string());
-    let mode = env::args().nth(3).unwrap_or_else(|| "json".to_string());
+    let host = format!("{}:{}", args.host, args.mqtt_port);
+    let port = args.exmebus_port;//env::args().nth(1).unwrap_or_else(|| "2048".to_string());
+    let _topic = args.topic;//env::args().nth(2).unwrap_or_else(|| "trash".to_string());
+    let mode = args.mode;//env::args().nth(3).unwrap_or_else(|| "json".to_string());
+    let machine_ide = args.machine_id;
 
     let mut topic = String::new();
-    if mode == "json" {
-        topic = format!("incoming/machine/{_topic}/json");
-    } else {
-        topic = format!("incoming/machine/{_topic}");
+    match mode {
+        Mode::JSON => topic = format!("incoming/machine/{_topic}/json"),
+        Mode::Redi => topic = format!("incoming/machine/{_topic}"),
     }
 
     // Create the client. Use an ID for a persistent session.
@@ -107,7 +107,7 @@ fn main() {
     let create_opts = mqtt::CreateOptionsBuilder::new()
         .mqtt_version(mqtt::MQTT_VERSION_5)
         .server_uri(host)
-        .client_id(format!("mac_id_{_topic}_{port}"))
+        .client_id(format!("mac_id_{machine_ide}_{port}"))
         .finalize();
 
     // Create the client connection
@@ -123,7 +123,7 @@ fn main() {
         // Define the set of options for the connection
         let lwt = mqtt::Message::new(
             "status",
-            format!("{_topic} on port {port} lost connection"),
+            format!("{machine_ide} on port {port} lost connection"),
             mqtt::QOS_2,
         );
 
