@@ -2,6 +2,7 @@
 name = "mqtt2exmebus"
 version = "0.2.1"
 edition = "2021"
+description = "A piece of converter to convert incoming JSON into redisignal."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
