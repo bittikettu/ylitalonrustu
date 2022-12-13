@@ -1,6 +1,8 @@
-# ylitalonrustu
+# MQTT2Exmebus
 
 Application which listens for MQTT channel and converts that data into socket binary format.
+
+## Help
 
 ```
 A piece of converter to convert incoming JSON into redisignal.
@@ -38,5 +40,21 @@ Options:
 
   -V, --version
           Print version information
+
+```
+
+## Testing
+This in one console.
+``` 
+nc -l -p 124
+```
+
+This in second console.
+``` 
+./mqtt2exmebus --topic derp/ --exmebus-port 1234 --mqtt-port 1883 --host tcp://test.mosquitto.org --machine-id der123 --mode json -dd
+```
+And this in third console.
+``` 
+mosquitto_pub -h test.mosquitto.org -t derp/der123/json -m '{"id":5002,"ts":"13311953022000","dt":9,"val":"KISSUUUU"}' 
 
 ```
