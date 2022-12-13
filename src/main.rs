@@ -68,6 +68,11 @@ struct Args {
     /// Mode of the parser json/redi
     #[arg(long, value_enum)]
     mode: Mode,
+
+    //// Debug mode
+    /// Maximum debug level 2 ie. -dd
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    debug: u8,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -167,6 +172,11 @@ fn main() {
                 if msg.retained() {
                     print!("(R) ");
                 }
+                
+                match args.debug {
+                    2 => println!("{}",msg.payload_str()),
+                    _ => {},
+                }
 
                 match mode {
                     Mode::JSON => {
@@ -175,6 +185,9 @@ fn main() {
                                 for mut emsg in retvec {
                                     match emsg.exmebusify() {
                                         Ok(bt) => {
+                                            if args.debug >= 1 {
+                                                println!("{:?}", emsg);
+                                            }
                                             let mors = stream.write(&bt);
                                             match mors {
                                                 Ok(_) => (), // Do not do anything when everything just works fine!
