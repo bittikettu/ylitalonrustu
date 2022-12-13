@@ -79,29 +79,24 @@ enum Mode {
 }
 
 fn main() {
-    // Initialize the logger from the environment
-    // env_logger::init();
-    //let id = Uuid::new_v4();
-    //let mut counter: u128 = 0;
     let args = Args::parse();
 
     println!("{:?}", args);
-    // println!("Hello {}!", args);
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
     println!("Version {}", version);
 
     let host = format!("{}:{}", args.host, args.mqtt_port);
-    let port = args.exmebus_port;//env::args().nth(1).unwrap_or_else(|| "2048".to_string());
-    let _topic = args.topic;//env::args().nth(2).unwrap_or_else(|| "trash".to_string());
-    let mode = args.mode;//env::args().nth(3).unwrap_or_else(|| "json".to_string());
+    let port = args.exmebus_port;
+    let _topic = args.topic;
+    let mode = args.mode;
     let machine_ide = args.machine_id;
 
     let mut topic = String::new();
     match mode {
-        Mode::JSON => topic = format!("incoming/machine/{_topic}/json"),
-        Mode::Redi => topic = format!("incoming/machine/{_topic}"),
+        Mode::JSON => topic = format!("{_topic}{machine_ide}/json"),
+        Mode::Redi => topic = format!("{_topic}{machine_ide}"),
     }
-
+    println!("Listening topic {} in mode {:?}!", topic, mode);
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
     let create_opts = mqtt::CreateOptionsBuilder::new()
@@ -172,34 +167,41 @@ fn main() {
                 if msg.retained() {
                     print!("(R) ");
                 }
-                match to_exmebus_better(&msg.payload_str()) {
-                    Ok(retvec) => {
-                        for mut emsg in retvec {
-                            match emsg.exmebusify() {
-                                Ok(bt) => {
-                                    let mors = stream.write(&bt);
-                                    match mors {
-                                        Ok(_) => (), // Do not do anything when everything just works fine!
-                                        Err(e) => {
-                                            println!("Should be stored to redis {:?}", e);
-                                            stream =
-                                                TcpStream::connect(format!("127.0.0.1:{port}"))?;
-                                            match stream
-                                                .set_write_timeout(Some(Duration::new(1, 0)))
-                                            {
-                                                Ok(_) => println!("Timeout set"),
+
+                match mode {
+                    Mode::JSON => {
+                        match to_exmebus_better(&msg.payload_str()) {
+                            Ok(retvec) => {
+                                for mut emsg in retvec {
+                                    match emsg.exmebusify() {
+                                        Ok(bt) => {
+                                            let mors = stream.write(&bt);
+                                            match mors {
+                                                Ok(_) => (), // Do not do anything when everything just works fine!
                                                 Err(e) => {
-                                                    println!("Could not set timeout: {:?}", e)
+                                                    println!("Should be stored to redis {:?}", e);
+                                                    stream =
+                                                        TcpStream::connect(format!("127.0.0.1:{port}"))?;
+                                                    match stream
+                                                        .set_write_timeout(Some(Duration::new(1, 0)))
+                                                    {
+                                                        Ok(_) => println!("Timeout set"),
+                                                        Err(e) => {
+                                                            println!("Could not set timeout: {:?}", e)
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
+                                        Err(e) => println!("{:?}", e),
                                     }
                                 }
-                                Err(e) => println!("{:?}", e),
                             }
+                            Err(e) => println!("{:?}", e),
                         }
-                    }
-                    Err(e) => println!("{:?}", e),
+                    },
+                    // Redi-mode has not been implemented
+                    Mode::Redi => {},
                 }
             } else {
                 // A "None" means we were disconnected. Try to reconnect...
