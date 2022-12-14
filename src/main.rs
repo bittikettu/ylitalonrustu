@@ -34,62 +34,24 @@
  *******************************************************************************/
 
 //use futures::future::OrElse;
+mod exme;
+mod appargs;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 use std::{env, process, time::Duration};
-mod exme;
-use crate::exme::to_exmebus_better;
 use clap::{Parser, ValueEnum};
 use std::io::prelude::*;
 use std::net::TcpStream;
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Topic of the MQTT-channel to listen ie. incoming/machine/HD453/json
-    #[arg(long)]
-    topic: String,
-
-    /// Exmebus-port where to forward data
-    #[arg(long)]
-    exmebus_port: u64,
-
-    /// Local mqtt port, 1883 or something
-    #[arg(long)]
-    mqtt_port: u64,
-
-    /// MQTT-server address ie. tcp://localhost
-    #[arg(long)]
-    host: String,
-
-    #[arg(long)]
-    machine_id: String,
-
-    /// Mode of the parser json/redi
-    #[arg(long, value_enum)]
-    mode: Mode,
-
-    //// Debug mode
-    /// Maximum debug level 2 ie. -dd
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    debug: u8,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum Mode {
-    /// Convert incoming data from JSON to redi
-    JSON,
-    /// Convert incoming data from redi signals to redi (not implemented)
-    Redi,
-}
+use crate::appargs::Args;
+use crate::appargs::Mode;
+use crate::exme::to_exmebus_better;
 
 fn main() {
     let args = Args::parse();
-
-    println!("{:?}", args);
+    if args.debug >= 1 {
+        println!("{:?}", args);
+    }
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-    println!("Version {}", version);
-
     let host = format!("{}:{}", args.host, args.mqtt_port);
     let port = args.exmebus_port;
     let _topic = args.topic;
@@ -101,6 +63,7 @@ fn main() {
         Mode::JSON => topic = format!("{_topic}{machine_ide}/json"),
         Mode::Redi => topic = format!("{_topic}{machine_ide}"),
     }
+    println!("Version {}", version);
     println!("Listening topic {} in mode {:?}!", topic, mode);
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
