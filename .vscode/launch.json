@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'rusti'",
+            "name": "Debug executable 'mqtt2exmebus'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=rusti",
-                    "--package=rusti"
+                    "--bin=mqtt2exmebus",
+                    "--package=mqtt2exmebus"
                 ],
                 "filter": {
-                    "name": "rusti",
+                    "name": "mqtt2exmebus",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'rusti'",
+            "name": "Debug unit tests in executable 'mqtt2exmebus'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=rusti",
-                    "--package=rusti"
+                    "--bin=mqtt2exmebus",
+                    "--package=mqtt2exmebus"
                 ],
                 "filter": {
-                    "name": "rusti",
+                    "name": "mqtt2exmebus",
                     "kind": "bin"
                 }
             },

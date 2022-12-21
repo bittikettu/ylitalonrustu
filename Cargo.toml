@@ -2,6 +2,7 @@
 name = "mqtt2exmebus"
 version = "0.2.1"
 edition = "2021"
+authors = ["Juha Viitanen <juha.viitanen@exertus.fi>"]
 description = "A piece of converter to convert incoming JSON into redisignal."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -20,3 +21,7 @@ clap = { version = "4.0.29", features = ["derive"] }
 strip = true
 lto = true
 codegen-units = 1
+
+[profile.production]
+inherits = "release"
+

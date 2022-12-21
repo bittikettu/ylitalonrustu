@@ -39,7 +39,7 @@ mod appargs;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 use std::{env, process, time::Duration};
-use clap::{Parser, ValueEnum};
+use clap::{Parser};
 use std::io::prelude::*;
 use std::net::TcpStream;
 use crate::appargs::Args;
@@ -84,9 +84,9 @@ fn main() {
         let mut strm = cli.get_stream(50);
 
         // Define the set of options for the connection
-        let lwt = mqtt::Message::new(
-            "status",
-            format!("{machine_ide} on port {port} lost connection"),
+        let lwt = mqtt::Message::new_retained(
+            format!("status/{machine_ide}/connection"),
+            format!("0"),
             mqtt::QOS_2,
         );
 
@@ -119,6 +119,13 @@ fn main() {
         // Just loop on incoming messages.
         println!("Waiting for messages...");
 
+        let con_message = mqtt::Message::new_retained(
+            format!("status/{machine_ide}/connection"),
+            format!("1"),
+            mqtt::QOS_2,
+        );
+        cli.publish(con_message);
+
         // Note that we're not providing a way to cleanly shut down and
         // disconnect. Therefore, when you kill this app (with a ^C or
         // whatever) the server will get an unexpected drop and then
@@ -136,12 +143,14 @@ fn main() {
                     print!("(R) ");
                 }
                 
+                // If debug-level is se to 2, then print the MQTT payload
                 match args.debug {
                     2 => println!("{}",msg.payload_str()),
                     _ => {},
                 }
 
                 match mode {
+                    // If mode is defined to JSON, then assume that the payload is in JSON
                     Mode::JSON => {
                         match to_exmebus_better(&msg.payload_str()) {
                             Ok(retvec) => {

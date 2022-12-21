@@ -18,7 +18,6 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str;
-use std::convert::Into;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
