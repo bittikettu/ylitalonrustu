@@ -36,6 +36,7 @@
 //use futures::future::OrElse;
 mod exme;
 mod appargs;
+mod packets;
 use futures::{executor::block_on, stream::StreamExt};
 use paho_mqtt as mqtt;
 use std::{env, process, time::Duration};
@@ -125,6 +126,13 @@ fn main() {
             mqtt::QOS_2,
         );
         cli.publish(con_message);
+
+        let version_message = mqtt::Message::new_retained(
+            format!("status/{machine_ide}/version"),
+            version,
+            mqtt::QOS_2,
+        );
+        cli.publish(version_message);
 
         // Note that we're not providing a way to cleanly shut down and
         // disconnect. Therefore, when you kill this app (with a ^C or

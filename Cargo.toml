@@ -24,4 +24,3 @@ codegen-units = 1
 
 [profile.production]
 inherits = "release"
-

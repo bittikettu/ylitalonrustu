@@ -18,6 +18,8 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str;
+use clap::{Parser, ValueEnum};
+use crate::packets::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
@@ -26,84 +28,11 @@ pub enum MyError {
     PreliminaryDataNotValid,
 }
 
-pub enum DataSignalGroups {
-    //Info,
-    //Common,
-    //Spn,
-    User = 100
-}
-
-pub enum SignalSampleTypes {
-    Current,
-    /*Average,
-    Minimum,
-    ChangeCount,
-    EnableCount,
-    DisableCount,
-    ValidCount*/
-}
-
-#[allow(non_camel_case_types)]
-#[repr(u8)]
-pub enum ViewTypes {
-    V_VOID,               /* void */
-    V_BIT,                /* bit */
-    V_SIGNED_CHAR,        /* signed char */
-    V_SIGNED_SHORT,       /* signed short */
-    V_SIGNED_LONG,        /* signed long */
-    V_UNSIGNED_CHAR,      /* unsigned char */
-    V_UNSIGNED_SHORT,     /* unsigned short */
-    V_UNSIGNED_LONG,      /* unsigned long */
-    V_FLOAT,              /* float */
-    V_STRING,             /* string */
-    V_HEX,                /* hex */
-    V_BINARY,             /* binary */
-    V_BE_SIGNED_SHORT,    /* big-endian signed short */
-    V_BE_SIGNED_LONG,     /* big-endian signed long */
-    V_BE_UNSIGNED_SHORT,  /* big-endian unsigned short */
-    V_BE_UNSIGNED_LONG,   /* big-endian unsigned long */
-    V_UNIX_TIME,          /* unix time */
-    V_TWO_BIT,            /* J1939 two-bit discrete parameter */
-    V_SIGNED_LONG_LONG,   /* __int64 */
-    V_UNSIGNED_LONG_LONG, /* unsigned __int64 */
-    V_DOUBLE,             /* double */
-}
-
-pub const EMT_OWN_DATA_SIGNAL_MESSAGE: u16 = 21;
 pub const SNIP_SNIP_VECTOR_HEADER: u16 = 8;
 pub const EXTRA_LEN_ADJUSTMENTS: u16 = 4;
 pub const MAGIC_HEADER_OFFSET: usize = 20; // really this is the size of Owndatasignalpacket structure until better this is it.
 pub const MAGIC_HEADER_SKIP_VECTOR: usize = MAGIC_HEADER_OFFSET + SNIP_SNIP_VECTOR_HEADER as usize;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct OwnDataSignalPacket {
-    packet_length: u16,         // Total packet len
-    packet_id: u16,             // Packet type, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-    sample_packet_length: u16,  // Packet payload len
-    signal_sample_type: u8,     // current value, average, minimum or maximum, see SST_
-    pub signal_view_type: u8,
-    signal_number: u16,
-    signal_group: u16,          // see DSG_
-    milliseconds: i64,          // Timestamp in milliseconds since 1601
-    data: Vec<u8>,
-}
-
-impl Default for OwnDataSignalPacket {
-    fn default() -> OwnDataSignalPacket {
-        OwnDataSignalPacket {
-            packet_length: 0,                       // Paketin kokonaispituus
-            packet_id: EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
-            sample_packet_length: 0,                // pituus tavuina
-            signal_sample_type: SignalSampleTypes::Current as u8, // current value, average, minimum or maximum, see SST_
-            signal_view_type: 0,
-            signal_number: 0,
-            signal_group: DataSignalGroups::User as u16, // see DSG_
-            milliseconds: 0,   // Timestamp in milliseconds since 1601
-            // data len samplePacketLength - 16
-            data: Vec::new(),
-        }
-    }
-}
 
 impl OwnDataSignalPacket {
     pub fn exmebusify(&mut self) -> Result<Vec<u8>, MyError> {
