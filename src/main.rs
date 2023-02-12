@@ -34,17 +34,17 @@
  *******************************************************************************/
 
 //use futures::future::OrElse;
-mod exme;
 mod appargs;
-use futures::{executor::block_on, stream::StreamExt};
-use paho_mqtt as mqtt;
-use std::{env, process, time::Duration};
-use clap::{Parser, ValueEnum};
-use std::io::prelude::*;
-use std::net::TcpStream;
+mod exme;
 use crate::appargs::Args;
 use crate::appargs::Mode;
 use crate::exme::to_exmebus_better;
+use clap::{Parser, ValueEnum};
+use futures::{executor::block_on, stream::StreamExt};
+use paho_mqtt as mqtt;
+use std::io::prelude::*;
+use std::net::TcpStream;
+use std::{env, process, time::Duration};
 
 fn main() {
     let args = Args::parse();
@@ -52,25 +52,21 @@ fn main() {
         println!("{:?}", args);
     }
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
-    let host = format!("{}:{}", args.host, args.mqtt_port);
-    let port = args.exmebus_port;
-    let _topic = args.topic;
-    let mode = args.mode;
-    let machine_ide = args.machine_id;
 
     let mut topic = String::new();
-    match mode {
-        Mode::JSON => topic = format!("{_topic}{machine_ide}/json"),
-        Mode::Redi => topic = format!("{_topic}{machine_ide}"),
+    match args.mode {
+        Mode::JSON => topic = format!("{}{}/json", args.topic, args.machine_id),
+        Mode::Redi => topic = format!("{}{}", args.topic, args.machine_id),
     }
     println!("Version {}", version);
-    println!("Listening topic {} in mode {:?}!", topic, mode);
+    println!("Listening topic {} in mode {:?}!", topic, args.mode);
+
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
     let create_opts = mqtt::CreateOptionsBuilder::new()
         .mqtt_version(mqtt::MQTT_VERSION_5)
-        .server_uri(host)
-        .client_id(format!("mac_id_{machine_ide}_{port}"))
+        .server_uri(format!("{}:{}", args.host, args.mqtt_port))
+        .client_id(format!("mac_id_{}_{}", args.machine_id, args.exmebus_port))
         .finalize();
 
     // Create the client connection
@@ -86,7 +82,10 @@ fn main() {
         // Define the set of options for the connection
         let lwt = mqtt::Message::new(
             "status",
-            format!("{machine_ide} on port {port} lost connection"),
+            format!(
+                "{} on port {} lost connection",
+                args.machine_id, args.exmebus_port
+            ),
             mqtt::QOS_2,
         );
 
@@ -100,7 +99,7 @@ fn main() {
         // Make the connection to the broker
         println!("Connecting to the MQTT server...");
         println!("Machine={topic}");
-        println!("Exmebusport={port}");
+        println!("Exmebusport={}", args.exmebus_port);
         cli.connect(conn_opts).await?;
 
         //println!("Subscribing to topics: {:?}", TOPICS);
@@ -124,8 +123,17 @@ fn main() {
         // whatever) the server will get an unexpected drop and then
         // should emit the LWT message.
 
-        let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
-        match stream.set_write_timeout(Some(Duration::new(1, 0))) {
+        let mut exmebus_stream:TcpStream;
+
+        match TcpStream::connect(format!("127.0.0.1:{}", args.exmebus_port)) {
+            Ok(ret_strm) => exmebus_stream = ret_strm,
+            Err(e) => println!("Could not set timeout: {:?}", e),
+        }
+
+
+
+        //let mut stream = TcpStream::connect(format!("127.0.0.1:{}", args.exmebus_port))?;
+        match exmebus_stream.set_write_timeout(Some(Duration::new(1, 0))) {
             Ok(_) => println!("Timeout set"),
             Err(e) => println!("Could not set timeout: {:?}", e),
         }
@@ -135,13 +143,13 @@ fn main() {
                 if msg.retained() {
                     print!("(R) ");
                 }
-                
+
                 match args.debug {
-                    2 => println!("{}",msg.payload_str()),
-                    _ => {},
+                    2 => println!("{}", msg.payload_str()),
+                    _ => {}
                 }
 
-                match mode {
+                match args.mode {
                     Mode::JSON => {
                         match to_exmebus_better(&msg.payload_str()) {
                             Ok(retvec) => {
@@ -151,16 +159,14 @@ fn main() {
                                             if args.debug >= 1 {
                                                 println!("{:?}", emsg);
                                             }
-                                            let mors = stream.write(&bt);
-                                            match mors {
+                                            match exmebus_stream.write(&bt) {
                                                 Ok(_) => (), // Do not do anything when everything just works fine!
                                                 Err(e) => {
                                                     println!("Should be stored to redis {:?}", e);
-                                                    stream =
-                                                        TcpStream::connect(format!("127.0.0.1:{port}"))?;
-                                                    match stream
-                                                        .set_write_timeout(Some(Duration::new(1, 0)))
-                                                    {
+                                                    exmebus_stream = TcpStream::connect(format!("127.0.0.1:{}",args.exmebus_port))?;
+                                                    match exmebus_stream.set_write_timeout(Some(
+                                                        Duration::new(1, 0),
+                                                    )) {
                                                         Ok(_) => println!("Timeout set"),
                                                         Err(e) => {
                                                             println!("Could not set timeout: {:?}", e)
@@ -175,9 +181,9 @@ fn main() {
                             }
                             Err(e) => println!("{:?}", e),
                         }
-                    },
+                    }
                     // Redi-mode has not been implemented
-                    Mode::Redi => {},
+                    Mode::Redi => {}
                 }
             } else {
                 // A "None" means we were disconnected. Try to reconnect...

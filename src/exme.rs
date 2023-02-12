@@ -18,7 +18,7 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str;
-use std::convert::Into;
+use std::net::TcpStream;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
@@ -89,8 +89,19 @@ pub struct OwnDataSignalPacket {
     data: Vec<u8>,
 }
 
+pub struct ExmebusConnection {
+    stream: TcpStream,
+}
+
+// impl ExmebusConnection{
+//     fn connect(&mut self, port:u32) -> Result<_,MyError> {
+//         self.stream = TcpStream::connect(format!("127.0.0.1:{}", port))?;
+//         return Err(MyError::ConversionNotDefined) 
+//     }
+// }
+
 impl Default for OwnDataSignalPacket {
-    fn default() -> OwnDataSignalPacket {
+    fn default() -> Self {
         OwnDataSignalPacket {
             packet_length: 0,                       // Paketin kokonaispituus
             packet_id: EMT_OWN_DATA_SIGNAL_MESSAGE, // Paketin tyyppi, EMT_OWN_DATA_SIGNAL_MESSAGE, 21
