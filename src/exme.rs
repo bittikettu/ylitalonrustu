@@ -17,8 +17,10 @@
 use bincode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::io::Write;
 use std::str;
 use std::net::TcpStream;
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MyError {
@@ -90,15 +92,54 @@ pub struct OwnDataSignalPacket {
 }
 
 pub struct ExmebusConnection {
-    stream: TcpStream,
+    port: u32,
+    stream: Box<TcpStream>,
+    packets: Vec<OwnDataSignalPacket>,
 }
 
-// impl ExmebusConnection{
-//     fn connect(&mut self, port:u32) -> Result<_,MyError> {
-//         self.stream = TcpStream::connect(format!("127.0.0.1:{}", port))?;
-//         return Err(MyError::ConversionNotDefined) 
+// impl ExmebusConnection {
+//     /// Creates a new `ConnectOptionsBuilder`
+//     pub fn new() -> Self {
+//         match TcpStream::connect(format!("127.0.0.1:{}", 124)) {
+//             Ok(ret_strm) => Self { stream: ret_strm, packets: Vec<OwnDataSignalPacket> },
+//             Err(e) => println!("Could not set timeout: {:?}", e),
+//         }
 //     }
-// }
+// };
+impl ExmebusConnection{
+    /*fn connect(&mut self, port:u32) -> Result<_,MyError> {
+        self.stream = TcpStream::connect(format!("127.0.0.1:{}", port))?;
+        return Err(MyError::ConversionNotDefined) 
+    }*/
+
+    pub fn new(port:u32) -> Self {
+        Self::default(port)
+    }
+
+    pub fn default(port:u32) -> Self {
+        ExmebusConnection {
+            port: port,
+            stream: Box::new(TcpStream::connect(format!("127.0.0.1:{}", port)).unwrap()),
+            packets: Vec::new(),
+        }
+    }
+
+    // pub fn get_stream(&mut self) -> TcpStream {
+    //     return self.stream;
+    // }
+
+    pub fn write(&mut self, buf:&[u8] ) {
+        self.stream.write(buf);
+    }
+
+    pub fn set_timeout(&mut self) {
+        match self.stream.set_write_timeout(Some(Duration::new(1, 0))) {
+            Ok(_) => println!("Timeout set"),
+            Err(e) => println!("Could not set timeout: {:?}", e),
+        }
+    }
+
+}
 
 impl Default for OwnDataSignalPacket {
     fn default() -> Self {
@@ -280,5 +321,25 @@ impl OwnDataSignalPacket {
             }
         }        
         return Ok(retvec);
+    }
+}
+
+
+pub fn write_to_exmebus(msg: &str, conn: ExmebusConnection ) {
+    match to_exmebus_better(&msg) {
+        Ok(retvec) => {
+            for mut emsg in retvec {
+                match emsg.exmebusify() {
+                    Ok(bt) => {
+                        //conn.write(&bt);
+                        //let mut soket = conn.get_stream();
+                        //soket.write(&bt).unwrap();
+                        //rediconnection.write_to_exmebus(bt);
+                    }
+                    Err(e) => println!("{:?}", e),
+                }
+            }
+        }
+        Err(e) => println!("{:?}", e),
     }
 }

@@ -38,6 +38,7 @@ mod appargs;
 mod exme;
 use crate::appargs::Args;
 use crate::appargs::Mode;
+use crate::exme::ExmebusConnection;
 use crate::exme::to_exmebus_better;
 use clap::{Parser, ValueEnum};
 use futures::{executor::block_on, stream::StreamExt};
@@ -45,6 +46,7 @@ use paho_mqtt as mqtt;
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::{env, process, time::Duration};
+use crate::exme::write_to_exmebus;
 
 fn main() {
     let args = Args::parse();
@@ -123,20 +125,11 @@ fn main() {
         // whatever) the server will get an unexpected drop and then
         // should emit the LWT message.
 
-        let mut exmebus_stream:TcpStream;
+        //let mut exmebus_stream:TcpStream;
 
-        match TcpStream::connect(format!("127.0.0.1:{}", args.exmebus_port)) {
-            Ok(ret_strm) => exmebus_stream = ret_strm,
-            Err(e) => println!("Could not set timeout: {:?}", e),
-        }
+        let rediconnection = exme::ExmebusConnection::default(args.exmebus_port as u32);
+        //rediconnection.set_timeout();
 
-
-
-        //let mut stream = TcpStream::connect(format!("127.0.0.1:{}", args.exmebus_port))?;
-        match exmebus_stream.set_write_timeout(Some(Duration::new(1, 0))) {
-            Ok(_) => println!("Timeout set"),
-            Err(e) => println!("Could not set timeout: {:?}", e),
-        }
 
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
@@ -151,36 +144,7 @@ fn main() {
 
                 match args.mode {
                     Mode::JSON => {
-                        match to_exmebus_better(&msg.payload_str()) {
-                            Ok(retvec) => {
-                                for mut emsg in retvec {
-                                    match emsg.exmebusify() {
-                                        Ok(bt) => {
-                                            if args.debug >= 1 {
-                                                println!("{:?}", emsg);
-                                            }
-                                            match exmebus_stream.write(&bt) {
-                                                Ok(_) => (), // Do not do anything when everything just works fine!
-                                                Err(e) => {
-                                                    println!("Should be stored to redis {:?}", e);
-                                                    exmebus_stream = TcpStream::connect(format!("127.0.0.1:{}",args.exmebus_port))?;
-                                                    match exmebus_stream.set_write_timeout(Some(
-                                                        Duration::new(1, 0),
-                                                    )) {
-                                                        Ok(_) => println!("Timeout set"),
-                                                        Err(e) => {
-                                                            println!("Could not set timeout: {:?}", e)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Err(e) => println!("{:?}", e),
-                                    }
-                                }
-                            }
-                            Err(e) => println!("{:?}", e),
-                        }
+                        write_to_exmebus(&msg.to_string(),rediconnection);
                     }
                     // Redi-mode has not been implemented
                     Mode::Redi => {}
