@@ -101,8 +101,7 @@ fn main() {
             mqtt::QOS_2,
         );
 
-        let conn_opts = mqtt::ConnectOptionsBuilder::new()
-            .mqtt_version(mqtt::MQTT_VERSION_5)
+        let conn_opts = mqtt::ConnectOptionsBuilder::new_v5()
             .clean_start(false)
             .properties(mqtt::properties![mqtt::PropertyCode::SessionExpiryInterval => 3600])
             .will_message(lwt)
