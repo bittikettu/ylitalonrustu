@@ -47,7 +47,28 @@ use crate::appargs::Args;
 use crate::appargs::Mode;
 use crate::exme::to_exmebus_better;
 use env_logger::Env;
+use std::ptr;
+use std::os::windows::ffi::OsStrExt;
+use std::ffi::OsStr;
+use std::iter::once;
 
+#[cfg(windows)]
+use winapi::um::wincon::{SetConsoleTitleW, GetConsoleWindow};
+
+#[cfg(windows)]
+fn set_process_title(title: &str) -> Result<(), std::io::Error> {
+    let wide_title: Vec<u16> = OsStr::new(title).encode_wide().chain(once(0)).collect();
+    unsafe {
+        SetConsoleTitleW(wide_title.as_ptr());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn set_process_title(title: &str) -> Result<(), std::io::Error> {
+    // On non-Windows platforms, do nothing to change the process name
+    Ok(())
+}
 
 fn main() {
     
@@ -74,6 +95,7 @@ fn main() {
         Mode::JSON => topic = format!("{_topic}{machine_ide}/json"),
         Mode::Redi => topic = format!("{_topic}{machine_ide}"),
     }
+    set_process_title(format!("{_topic}{machine_ide}/json").as_str()).expect("Failed to set process title.");
     info!("Version {}", version);
     info!("Listening topic {} in mode {:?}!", topic, mode);
     // Create the client. Use an ID for a persistent session.

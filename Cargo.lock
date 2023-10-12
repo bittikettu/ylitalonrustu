@@ -599,6 +599,7 @@ dependencies = [
  "serde",
  "serde_json",
  "to_vec",
+ "winapi",
 ]
 
 [[package]]
