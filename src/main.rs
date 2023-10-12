@@ -42,15 +42,26 @@ use std::{env, process, time::Duration};
 use clap::{Parser, ValueEnum};
 use std::io::prelude::*;
 use std::net::TcpStream;
+use log::{error, info,warn,debug, Level, LevelFilter};
 use crate::appargs::Args;
 use crate::appargs::Mode;
 use crate::exme::to_exmebus_better;
+use env_logger::Env;
+
 
 fn main() {
+    
     let args = Args::parse();
     if args.debug >= 1 {
         println!("{:?}", args);
     }
+
+    match args.debug {
+        2 => env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init(),
+        1 => env_logger::Builder::from_env(Env::default().default_filter_or("info")).init(),
+        _ => env_logger::init(),
+    }
+
     let version = option_env!("PROJECT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
     let host = format!("{}:{}", args.host, args.mqtt_port);
     let port = args.exmebus_port;
@@ -63,8 +74,8 @@ fn main() {
         Mode::JSON => topic = format!("{_topic}{machine_ide}/json"),
         Mode::Redi => topic = format!("{_topic}{machine_ide}"),
     }
-    println!("Version {}", version);
-    println!("Listening topic {} in mode {:?}!", topic, mode);
+    info!("Version {}", version);
+    info!("Listening topic {} in mode {:?}!", topic, mode);
     // Create the client. Use an ID for a persistent session.
     // A real system should try harder to use a unique ID.
     let create_opts = mqtt::CreateOptionsBuilder::new()
@@ -75,7 +86,7 @@ fn main() {
 
     // Create the client connection
     let mut cli = mqtt::AsyncClient::new(create_opts).unwrap_or_else(|e| {
-        println!("Error creating the client: {:?}", e);
+        error!("Error creating the client: {:?}", e);
         process::exit(1);
     });
 
@@ -98,9 +109,9 @@ fn main() {
             .finalize();
 
         // Make the connection to the broker
-        println!("Connecting to the MQTT server...");
-        println!("Machine={topic}");
-        println!("Exmebusport={port}");
+        info!("Connecting to the MQTT server...");
+        info!("Machine={topic}");
+        info!("Exmebusport={port}");
         cli.connect(conn_opts).await?;
 
         //println!("Subscribing to topics: {:?}", TOPICS);
@@ -114,10 +125,9 @@ fn main() {
             2,
             mqtt::SubscribeOptions::with_retain_as_published(),
             None,
-        )
-        .await?;
+        ).await?;
         // Just loop on incoming messages.
-        println!("Waiting for messages...");
+        info!("Waiting for messages...");
 
         // Note that we're not providing a way to cleanly shut down and
         // disconnect. Therefore, when you kill this app (with a ^C or
@@ -126,18 +136,18 @@ fn main() {
 
         let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
         match stream.set_write_timeout(Some(Duration::new(1, 0))) {
-            Ok(_) => println!("Timeout set"),
-            Err(e) => println!("Could not set timeout: {:?}", e),
+            Ok(_) => info!("Timeout set"),
+            Err(e) => info!("Could not set timeout: {:?}", e),
         }
 
         while let Some(msg_opt) = strm.next().await {
             if let Some(msg) = msg_opt {
                 if msg.retained() {
-                    print!("(R) ");
+                    debug!("(R) ");
                 }
                 
                 match args.debug {
-                    2 => println!("{}",msg.payload_str()),
+                    2 => debug!("{}",msg.payload_str()),
                     _ => {},
                 }
 
@@ -149,31 +159,31 @@ fn main() {
                                     match emsg.exmebusify() {
                                         Ok(bt) => {
                                             if args.debug >= 1 {
-                                                println!("{:?}", emsg);
+                                                debug!("{:?}", emsg);
                                             }
                                             let mors = stream.write(&bt);
                                             match mors {
                                                 Ok(_) => (), // Do not do anything when everything just works fine!
                                                 Err(e) => {
-                                                    println!("Should be stored to redis {:?}", e);
+                                                    error!("Should be stored to redis {:?}", e);
                                                     stream =
                                                         TcpStream::connect(format!("127.0.0.1:{port}"))?;
                                                     match stream
                                                         .set_write_timeout(Some(Duration::new(1, 0)))
                                                     {
-                                                        Ok(_) => println!("Timeout set"),
+                                                        Ok(_) => info!("Timeout set"),
                                                         Err(e) => {
-                                                            println!("Could not set timeout: {:?}", e)
+                                                            warn!("Could not set timeout: {:?}", e)
                                                         }
                                                     }
                                                 }
                                             }
                                         }
-                                        Err(e) => println!("{:?}", e),
+                                        Err(e) => warn!("{:?}", e),
                                     }
                                 }
                             }
-                            Err(e) => println!("{:?}", e),
+                            Err(e) => warn!("{:?}", e),
                         }
                     },
                     // Redi-mode has not been implemented
@@ -181,18 +191,26 @@ fn main() {
                 }
             } else {
                 // A "None" means we were disconnected. Try to reconnect...
-                println!("Lost connection. Attempting reconnect.");
+                warn!("Lost connection. Attempting reconnect.");
                 while let Err(err) = cli.reconnect().await {
-                    println!("Error reconnecting: {}", err);
+                    error!("Error reconnecting: {}", err);
                     // For tokio use: tokio::time::delay_for()
                     async_std::task::sleep(Duration::from_millis(1000)).await;
                 }
+                // reconnect also topics when succesfully reconnected
+                //cli.subscribe_with_options(
+                //    format!("{_topic}{machine_ide}/json"),
+                //    2,
+                //    mqtt::SubscribeOptions::with_retain_as_published(),
+                //    None,
+                //).await?;
+
             }
         }
 
         // Explicit return type for the async block
         Ok::<(), mqtt::Error>(())
     }) {
-        eprintln!("{}", err);
+        error!("{}", err);
     }
 }
